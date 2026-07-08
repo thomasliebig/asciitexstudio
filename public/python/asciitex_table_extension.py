@@ -18,6 +18,7 @@ class TableNode(Node):
     frame: str = "single"
     caption: Optional[str] = None
     label: Optional[str] = None
+    numbered: bool = True
 
 
 @dataclass
@@ -27,6 +28,7 @@ class DecoratedBoxNode(Node):
     style: str = "single"
     title: Optional[str] = None
     label: Optional[str] = None
+    numbered: bool = True
 
 
 @dataclass
@@ -113,6 +115,7 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
                 header=opts.get("header", "true").lower() in ("1", "true", "yes", "on"),
                 frame=opts.get("frame", "single").lower(),
                 caption=_strip_quotes(opts.get("caption")),
+                numbered=opts.get("numbered", "true").lower() in ("1", "true", "yes", "on"),
             )
             if pending_label:
                 node.label, pending_label = pending_label, None
@@ -133,6 +136,7 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
                 width=opts.get("width", r"\textwidth"),
                 style=opts.get("style", "single").lower(),
                 title=_strip_quotes(opts.get("title")),
+                numbered=opts.get("numbered", "true").lower() in ("1", "true", "yes", "on"),
             )
             if pending_label:
                 node.label, pending_label = pending_label, None
@@ -150,6 +154,8 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
 
     def try_number(self, *, node: Node, meta: Dict[str, Any], counters: Any, refs: Any) -> bool:
         if isinstance(node, TableNode):
+            if not node.numbered:
+                return True
             number = getattr(node, "_asciitex_number", None)
             if number is None:
                 number = getattr(counters, "table", 0) + 1
@@ -157,6 +163,8 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
                 setattr(node, "_asciitex_number", number)
             meta["tableno"] = number
         elif isinstance(node, DecoratedBoxNode):
+            if not node.numbered:
+                return True
             number = getattr(node, "_asciitex_number", None)
             if number is None:
                 number = getattr(counters, "box", 0) + 1

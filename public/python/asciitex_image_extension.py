@@ -218,6 +218,7 @@ class AsciiImageNode(HostNode):
 
     caption: Optional[str] = None
     frame: bool = False
+    numbered: bool = True
 
 
 # ============================================================
@@ -364,6 +365,7 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
             dither=_get_bool("dither", False),
             caption=self._strip_quotes(opts.get("caption")),
             frame=_get_bool("frame", False),
+            numbered=_get_bool("numbered", True),
         )
 
         if pending_label:
@@ -378,6 +380,8 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
     def try_number(self, *, node: HostNode, meta: Dict[str, Any], counters: Any, refs: Any) -> bool:
         if not isinstance(node, AsciiImageNode):
             return False
+        if not node.numbered:
+            return True
         fno = counters.next_figure()
         meta["figno"] = fno
         if getattr(node, "label", None):

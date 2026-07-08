@@ -650,6 +650,7 @@ class PlotDiagramNode(HostNode):
     caption: Optional[str] = None
     frame: bool = False
     label: Optional[str] = None
+    numbered: bool = True
 
 
 class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension):
@@ -729,6 +730,7 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
             mode=mode,
             caption=caption,
             frame=frame,
+            numbered=_get_bool("numbered", True),
         )
 
         if pending_label:
@@ -741,6 +743,8 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
     def try_number(self, *, node: HostNode, meta: Dict[str, Any], counters: Any, refs: Any) -> bool:
         if not isinstance(node, PlotDiagramNode):
             return False
+        if not node.numbered:
+            return True
         dno = counters.next_diagram()
         meta["diano"] = dno
         if getattr(node, "label", None):

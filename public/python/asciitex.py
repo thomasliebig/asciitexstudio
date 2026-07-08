@@ -749,11 +749,13 @@ class SectionNode(Node):
     level: int
     title: str
     label: Optional[str] = None
+    numbered: bool = True
 
 @dataclass
 class EquationNode(Node):
     latex: str
     label: Optional[str] = None
+    numbered: bool = True
 
 @dataclass
 class CodeNode(Node):
@@ -794,10 +796,61 @@ class FloatBarrierNode(Node):
 class BibNode(Node):
     bibfiles: List[str]
 
+@dataclass
+class BibEntryNode(Node):
+    key: str
+    bibfiles: List[str]
+
+@dataclass
+class ManualBibliographyNode(Node):
+    entries: List[Tuple[str, Optional[str], str]]
+
 
 # ============================================================
 # Parser
 # ============================================================
+
+def _strip_tex_comment_line(line: str) -> str:
+    """Strip an unescaped TeX comment and turn ``\%`` into a literal percent."""
+    out: List[str] = []
+    i = 0
+    while i < len(line):
+        if line[i] == "\\" and i + 1 < len(line) and line[i + 1] == "%":
+            out.append("%")
+            i += 2
+            continue
+        if line[i] == "%":
+            break
+        out.append(line[i])
+        i += 1
+    return "".join(out).rstrip()
+
+
+def _preprocess_tex_comments(src: str) -> str:
+    """Apply TeX comments while preserving literal code, verbatim and diagram bodies."""
+    output: List[str] = []
+    raw_end: Optional[str] = None
+    for line in src.splitlines():
+        stripped = line.strip()
+        if raw_end is not None:
+            output.append(line)
+            if stripped == raw_end:
+                raw_end = None
+            continue
+        if stripped == r"\begin{code}":
+            raw_end = r"\end{code}"
+            output.append(line)
+        elif stripped == r"\begin{verbatim}":
+            raw_end = r"\end{verbatim}"
+            output.append(line)
+        elif stripped.startswith(r"\begindiagram"):
+            raw_end = r"\enddiagram"
+            output.append(line)
+        elif stripped.startswith(r"\verbatim{"):
+            output.append(line)
+        else:
+            output.append(_strip_tex_comment_line(line))
+    return "\n".join(output)
 
 class TexLikeParser:
     def __init__(self, registry: Optional[ExtensionRegistry] = None) -> None:
@@ -817,21 +870,25 @@ class TexLikeParser:
                 out[k.strip()] = v.strip()
         return out
 
-    _cmd_section = re.compile(r"^\\(section|subsection|subsubsection)\{(.*)\}\s*$")
+    _cmd_section = re.compile(r"^\\(section|subsection|subsubsection)(\*)?\{(.*)\}\s*$")
     _cmd_label = re.compile(r"^\\label\{([^}]+)\}\s*$")
     _cmd_bib = re.compile(r"^\\bibliography\{([^}]+)\}\s*$")
+    _cmd_bibentry = re.compile(r"^\\bibentry(?:\[([^]]+)\])?\{([^}]+)\}\s*$")
+    _begin_manual_bib = re.compile(r"^\\begin\{thebibliography\}(?:\{[^}]*\})?\s*$")
+    _end_manual_bib = re.compile(r"^\\end\{thebibliography\}\s*$")
+    _cmd_bibitem = re.compile(r"^\\bibitem(?:\[([^]]+)\])?\{([^}]+)\}\s*(.*)$")
     _cmd_columnbreak = re.compile(r"^\\columnbreak\s*$")
     _cmd_floatbarrier = re.compile(r"^\\floatbarrier\s*$")
     _cmd_includeimage = re.compile(r"^\\includeimage(\[[^\]]*\])?\{([^}]+)\}\s*$")
-    _begin_env = re.compile(r"^\\begin\{([a-zA-Z]+)\}\s*$")
-    _end_env = re.compile(r"^\\end\{([a-zA-Z]+)\}\s*$")
+    _begin_env = re.compile(r"^\\begin\{([a-zA-Z]+)(\*)?\}\s*$")
+    _end_env = re.compile(r"^\\end\{([a-zA-Z]+)(\*)?\}\s*$")
     _begin_diag = re.compile(r"^\\begindiagram(\[[^\]]*\])?\s*$")
     _end_diag = re.compile(r"^\\enddiagram\s*$")
     _begin_twocol = re.compile(r"^\\begin\{twocolumns\}(\[[^\]]*\])?\s*$")
     _end_twocol = re.compile(r"^\\end\{twocolumns\}\s*$")
 
     def parse(self, src: str) -> List[Node]:
-        lines = src.splitlines()
+        lines = _preprocess_tex_comments(src).splitlines()
         i = 0
         nodes: List[Node] = []
         pending_label: Optional[str] = None
@@ -886,10 +943,41 @@ class TexLikeParser:
                 i += 1
                 continue
 
+            if self._begin_manual_bib.match(line.strip()):
+                flush_text(text_buf)
+                i += 1
+                entries: List[Tuple[str, Optional[str], str]] = []
+                key: Optional[str] = None
+                display_label: Optional[str] = None
+                body: List[str] = []
+
+                def flush_bibitem() -> None:
+                    nonlocal key, display_label, body
+                    if key is not None:
+                        entries.append((key, display_label, " ".join(part.strip() for part in body if part.strip())))
+                    key, display_label, body = None, None, []
+
+                while i < len(lines) and not self._end_manual_bib.match(lines[i].strip()):
+                    item = self._cmd_bibitem.match(lines[i].strip())
+                    if item:
+                        flush_bibitem()
+                        display_label = item.group(1).strip() if item.group(1) else None
+                        key = item.group(2).strip()
+                        if item.group(3).strip():
+                            body.append(item.group(3).strip())
+                    elif key is not None:
+                        body.append(lines[i])
+                    i += 1
+                flush_bibitem()
+                if i < len(lines):
+                    i += 1
+                nodes.append(ManualBibliographyNode(entries=entries))
+                continue
+
             m = self._begin_env.match(line.strip())
             if m:
-                env = m.group(1).lower()
-                if env in ("equation", "code"):
+                env = m.group(1).lower() + (m.group(2) or "")
+                if env in ("equation", "equation*", "code"):
                     flush_text(text_buf)
                     i += 1
                     body: List[str] = []
@@ -898,8 +986,8 @@ class TexLikeParser:
                         i += 1
                     if i < len(lines):
                         i += 1
-                    if env == "equation":
-                        n = EquationNode(latex="\n".join(body).strip(), label=None)
+                    if env in ("equation", "equation*"):
+                        n = EquationNode(latex="\n".join(body).strip(), label=None, numbered=(env == "equation"))
                         if pending_label:
                             n.label = pending_label
                             pending_label = None
@@ -932,9 +1020,9 @@ class TexLikeParser:
             m = self._cmd_section.match(line.strip())
             if m:
                 flush_text(text_buf)
-                kind, title = m.group(1), m.group(2).strip()
+                kind, starred, title = m.group(1), m.group(2), m.group(3).strip()
                 level = {"section": 1, "subsection": 2, "subsubsection": 3}[kind]
-                n = SectionNode(level=level, title=title)
+                n = SectionNode(level=level, title=title, numbered=not bool(starred))
                 if pending_label:
                     n.label = pending_label
                     pending_label = None
@@ -954,6 +1042,14 @@ class TexLikeParser:
                 flush_text(text_buf)
                 files = [p.strip() for p in m.group(1).split(",") if p.strip()]
                 nodes.append(BibNode(bibfiles=files))
+                i += 1
+                continue
+
+            m = self._cmd_bibentry.match(line.strip())
+            if m:
+                flush_text(text_buf)
+                files = [part.strip() for part in (m.group(1) or "refs.bib").split(",") if part.strip()]
+                nodes.append(BibEntryNode(key=m.group(2).strip(), bibfiles=files))
                 i += 1
                 continue
 
@@ -1666,6 +1762,34 @@ def load_bib_entries(
     return out
 
 
+def format_manual_bib_entries(
+    entries: List[Tuple[str, Optional[str], str]],
+    citations: "OrderedDict[str, int]",
+    refs: ReferenceResolver,
+) -> List[str]:
+    """Format ``\bibitem`` entries, reusing citation numbers when available."""
+    next_number = max(citations.values(), default=0) + 1
+    output: List[str] = []
+    for key, explicit_label, text in entries:
+        number = citations.get(key)
+        if number is None:
+            number = next_number
+            next_number += 1
+        label = explicit_label or str(number)
+        resolved = _replace_cites(refs.resolve_text(text), citations)
+        output.append(f"[{label}] {resolved}".rstrip())
+    return output
+
+
+def format_bibentry(key: str, bibfiles: List[str]) -> str:
+    """Return one BibTeX entry inline, without a bibliography number."""
+    fields = _parse_bibtex_files(bibfiles).get(key)
+    if fields is None:
+        return f"MISSING BIB ENTRY: {key}"
+    formatted = _format_bib_entry_plain(0, key, fields)
+    return re.sub(r"^\[0\]\s*", "", formatted)
+
+
 # ============================================================
 # Compiler
 # ============================================================
@@ -1738,13 +1862,13 @@ class TexLikeMonospaceCompiler:
                             ch_handled = True
                             break
 
-                    if (not ch_handled) and isinstance(ch, SectionNode):
+                    if (not ch_handled) and isinstance(ch, SectionNode) and ch.numbered:
                         secno = self.counters.next_section(ch.level)
                         ch_meta["secno"] = secno
                         if ch.label:
                             self.refs.register(ch.label, secno)
 
-                    elif (not ch_handled) and isinstance(ch, EquationNode):
+                    elif (not ch_handled) and isinstance(ch, EquationNode) and ch.numbered:
                         eqno = self.counters.next_equation()
                         ch_meta["eqno"] = eqno
                         if ch.label:
@@ -1771,13 +1895,13 @@ class TexLikeMonospaceCompiler:
                     handled = True
                     break
 
-            if (not handled) and isinstance(n, SectionNode):
+            if (not handled) and isinstance(n, SectionNode) and n.numbered:
                 secno = self.counters.next_section(n.level)
                 meta["secno"] = secno
                 if n.label:
                     self.refs.register(n.label, secno)
 
-            elif (not handled) and isinstance(n, EquationNode):
+            elif (not handled) and isinstance(n, EquationNode) and n.numbered:
                 eqno = self.counters.next_equation()
                 meta["eqno"] = eqno
                 if n.label:
@@ -1806,7 +1930,7 @@ class TexLikeMonospaceCompiler:
             elif isinstance(n, SectionNode):
                 resolved_title = self.refs.resolve_text(n.title)
                 resolved_title = _replace_cites(resolved_title, self.cite_numbers)
-                resolved_nodes.append((SectionNode(level=n.level, title=resolved_title, label=n.label), meta))
+                resolved_nodes.append((SectionNode(level=n.level, title=resolved_title, label=n.label, numbered=n.numbered), meta))
             else:
                 resolved_nodes.append((n, meta))
 
@@ -1923,8 +2047,8 @@ class TexLikeMonospaceCompiler:
                         meta_ch = getattr(child, '_meta', {})
                         secno = meta_ch.get('secno')
                         if secno is None:
-                            secno = self.counters.next_section(child.level)
-                            if child.label:
+                            secno = self.counters.next_section(child.level) if child.numbered else None
+                            if child.label and secno is not None:
                                 self.refs.register(child.label, secno)
                         box = self.typesetter.section(child.level, self.refs.resolve_text(child.title), number=secno, max_width=col_w)
                         box._role = "section"
@@ -1947,8 +2071,8 @@ class TexLikeMonospaceCompiler:
                         meta_ch = getattr(child, '_meta', {})
                         eqno = meta_ch.get('eqno')
                         if eqno is None:
-                            eqno = self.counters.next_equation()
-                            if child.label:
+                            eqno = self.counters.next_equation() if child.numbered else None
+                            if child.label and eqno is not None:
                                 self.refs.register(child.label, str(eqno))
                         stream_items.append(self.typesetter.equation(child.latex, number=eqno, max_width=col_w))
                         continue
@@ -2006,7 +2130,7 @@ class TexLikeMonospaceCompiler:
                             stream_items.append(FloatItem(box=box, placement=child.placement, meta={"kind": "diagram", "number": dno}))
                         continue
 
-                    if isinstance(child, BibNode):
+                    if isinstance(child, (BibNode, ManualBibliographyNode)):
                         # Flush everything before bibliography so the bibliography cannot "float up"
                         # into the currently shorter column (preserves reading order).
                         if stream_items:
@@ -2021,7 +2145,11 @@ class TexLikeMonospaceCompiler:
                             )
                             stream_items = []
 
-                        entries = load_bib_entries(child.bibfiles, self.cite_numbers)
+                        entries = (
+                            load_bib_entries(child.bibfiles, self.cite_numbers)
+                            if isinstance(child, BibNode)
+                            else format_manual_bib_entries(child.entries, self.cite_numbers, self.refs)
+                        )
                         # Flowable bibliography: title + one box per entry
                         box = Box.from_lines(["REFERENCES", "─" * len("REFERENCES")], width=col_w)
                         box._role = "section"
@@ -2033,6 +2161,12 @@ class TexLikeMonospaceCompiler:
                             stream_items.append(Box.from_lines([""], width=col_w))
                         if stream_items and isinstance(stream_items[-1], Box) and stream_items[-1].lines == [""]:
                             stream_items.pop()
+                        continue
+
+                    if isinstance(child, BibEntryNode):
+                        box = self.typesetter.text(format_bibentry(child.key, child.bibfiles), max_width=col_w)
+                        box._role = "text"
+                        stream_items.append(box)
                         continue
 
                 cursor = engine.layout_two_columns(
@@ -2062,6 +2196,26 @@ class TexLikeMonospaceCompiler:
                 if bib_boxes and bib_boxes[-1].lines == [""]:
                     bib_boxes.pop()
                 render_items.extend(bib_boxes)
+
+            elif isinstance(n, ManualBibliographyNode):
+                entries = format_manual_bib_entries(n.entries, self.cite_numbers, self.refs)
+                bib_boxes: List[Box] = []
+                title = "REFERENCES"
+                box = Box.from_lines([title, "─" * len(title)], width=inner_width)
+                box._role = "section"
+                bib_boxes.append(box)
+                for entry in entries:
+                    box = self.typesetter.text(entry, max_width=inner_width)
+                    box._role = "text"
+                    bib_boxes.extend([box, Box.from_lines([""], width=inner_width)])
+                if bib_boxes and bib_boxes[-1].lines == [""]:
+                    bib_boxes.pop()
+                render_items.extend(bib_boxes)
+
+            elif isinstance(n, BibEntryNode):
+                box = self.typesetter.text(format_bibentry(n.key, n.bibfiles), max_width=inner_width)
+                box._role = "text"
+                render_items.append(box)
 
         engine.layout_flow(render_items, cursor, float_queue=FloatQueue(), line_gap=line_gap, auto_height=auto_height)
 

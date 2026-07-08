@@ -81,24 +81,87 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
   '/README.txt': `AsciiTeX Studio project\n\nOpen main.tex to edit the document. Files are stored in your browser.\n`,
 }
 
-seedFiles['/main.tex'] = String.raw`% !asciitex example-version=7
+seedFiles['/main.tex'] = String.raw`% !asciitex example-version=9
 % !asciitex hyphenation=hyph-en-us.pat.txt
 % !asciitex German: change the line above to hyphenation=hyph-de-1996.pat.txt
+% Lines and trailing text after an unescaped percent sign are comments.
 
 \title{AsciiTeX Studio}
 \header{LIVE DOCUMENT}
 
-\section{Welcome}
-This document is compiled entirely in your browser. English Liang hyphenation patterns
-are loaded automatically. Cross-references may point forward or backward: Equations
+\section{AsciiTeX syntax reference}
+This document is both a rendered example and a source-level syntax reference. It is
+compiled entirely in your browser. English Liang hyphenation patterns are loaded
+automatically. A literal percent sign is written as \%, while this text remains visible. % hidden comment
+
+\subsection{Document structure and inline commands}
+The preamble above demonstrates title, header, comments, and hyphenation directives.
+Sections, subsections, and subsubsections are numbered automatically. References may
+point forward or backward: Equations
 \ref{eq:showcase}--\ref{eq:cases}, Figure \ref{fig:asciitex}, Table \ref{tab:features},
 Boxes \ref{box:single}--\ref{box:double}, Diagram \ref{dia:pipeline}, and \cite{knuth1981}.
+
+\quote{The quote command renders a short highlighted quotation.}
+\verbatim{Inline verbatim keeps     spacing, symbols, and 100% literal content.}
+
+\begin{code}
+The code environment preserves spacing and % characters exactly.
+  compile(source, width=96)
+\end{code}
+
+\subsection{Lists}
+Itemize creates bullets and supports nested lists.
+
+\begin{itemize}
+\item Monaco edits project files.
+\item BrowserFS stores them locally.
+\item Pyodide runs the Python compiler.
+  \begin{itemize}
+  \item No server upload is required.
+  \item Assets remain part of the project.
+  \end{itemize}
+\end{itemize}
+
+Enumerate creates numbered steps.
+
+\begin{enumerate}
+\item Edit main.tex.
+\item Compile automatically or manually.
+\item Copy the Unicode output.
+\end{enumerate}
+
+\subsection{Mathematics}
+Equation, eqnarray, matrices, fractions, roots, scripts, underbraces, and cases are
+demonstrated below. Labels attach counters; ref inserts the corresponding number.
 
 \label{eq:showcase}
 \begin{equation}
   \sum_{i=1}^{n} \frac{\sqrt{x_i^2 + \alpha}}{1 + x_i}
   = \left( \begin{bmatrix} a & b \\ c & d \end{bmatrix} \right)_{k}^{2}
 \end{equation}
+
+\section*{Unnumbered elements}
+Add a star to section or equation, or use numbered=false for extension elements.
+These elements render normally but do not advance their respective counters.
+
+\begin{equation*}
+  E = m c^2
+\end{equation*}
+
+\includeimage[width=.36\textwidth,place=t,numbered=false,palette=classic,caption="Unnumbered image",frame=true]{image.png}
+
+\begin{asciitable}[width=\textwidth,numbered=false,align=lc,header=true,frame=single,caption="Unnumbered table"]
+Option & Effect
+numbered=false & suppresses the counter
+\end{asciitable}
+
+\begin{box}[width=\textwidth,numbered=false,style=rounded,title="Unnumbered box"]
+The title is retained, but no Box number is added.
+\end{box}
+
+\begindiagram[width=.55\textwidth,height=8,place=t,numbered=false,mode=spec,caption="Unnumbered diagram",frame=true]
+{"type":"lines","x_label":"x","y_label":"y","grid":true,"lines":[{"x":[0,1,2],"y":[0,1,0],"name":"demo","ch":"*"}]}
+\enddiagram
 
 \subsection{Underbraces with labels}
 Use an underbrace to name a meaningful part or cite another numbered equation.
@@ -134,20 +197,15 @@ Equation \ref{eq:system} with the piecewise definition below.
   \end{cases}
 \end{equation}
 
-\begin{itemize}
-\item Monaco edits the project files.
-\item BrowserFS stores them locally.
-\item Pyodide runs the original Python compiler.
-\end{itemize}
-
-\section{Image using textwidth}
-The image uses a scaled \textwidth dimension and is converted to Unicode art.
+\section{Images and float placement}
+The image uses a scaled text width, placement t for a top float, a custom palette and
+all available conversion controls. Width may also use columnwidth or a fixed number.
 
 \label{fig:asciitex}
-\includeimage[width=.72\textwidth,caption="AsciiTeX sample image",frame=true]{image.png}
+\includeimage[width=.72\textwidth,place=t,palette=classic,invert=false,aspect=.45,autocontrast=true,gamma=1.0,contrast=1.0,dither=false,numbered=true,caption="AsciiTeX sample image",frame=true]{image.png}
 Figure \ref{fig:asciitex} is referenced by its independent figure counter.
 
-\section{Table using textwidth}
+\section{Tables using textwidth}
 Table \ref{tab:features} summarizes the examples and has its own counter.
 \label{tab:features}
 \begin{asciitable}[width=\textwidth,align=lcr,header=true,frame=double,caption="AsciiTeX feature matrix"]
@@ -207,7 +265,7 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
 The plot below uses the active \columnwidth instead of the full text width.
 
 \label{dia:pipeline}
-\begindiagram[width=\columnwidth,height=15,mode=spec,caption="Compilation pipeline",frame=true]
+\begindiagram[width=\columnwidth,height=15,place=h,mode=spec,caption="Compilation pipeline",frame=true]
 {
   "type": "lines",
   "title": "Pipeline",
@@ -221,6 +279,14 @@ The plot below uses the active \columnwidth instead of the full text width.
 Diagram \ref{dia:pipeline} remains referenceable from either column and from full-width text.
 \end{twocolumns}
 
+\section{Bibliography syntax}
+The cite command inserts a numbered citation. Bibentry prints one complete entry inline
+without a reference number; the optional file list defaults to refs.bib.
+
+\bibentry{knuth1981}
+
+Bibliography renders all cited entries as a numbered reference list.
+\bibliographystyle{unsrt}
 \bibliography{refs.bib}
 \footer{Rendered with AsciiTeX}`
 
@@ -245,7 +311,7 @@ export async function initProjectFs(): Promise<void> {
     for (const [path, content] of Object.entries(seedFiles)) await writeText(path, content)
   } else if (names.includes('main.tex')) {
     let currentMain = await readText('/main.tex')
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=7')) {
+    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=9')) {
       await writeText('/main.tex', seedFiles['/main.tex'])
       currentMain = seedFiles['/main.tex']
     } else if (currentMain.includes('Monaco edits the project files.') && !currentMain.includes('\\includeimage')) {

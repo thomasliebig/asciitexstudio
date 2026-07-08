@@ -1030,7 +1030,11 @@ class AsciiMathEquationExtension(ParserExtension, RenderExtension):
     ) -> Tuple[Optional[Any], int, Optional[str]]:
         line = lines[i].strip()
 
-        environments = {r"\begin{equation}": "equation", r"\begin{eqnarray}": "eqnarray"}
+        environments = {
+            r"\begin{equation}": "equation",
+            r"\begin{equation*}": "equation*",
+            r"\begin{eqnarray}": "eqnarray",
+        }
         env = environments.get(line)
         if env is None:
             return None, i, pending_label
@@ -1062,7 +1066,7 @@ class AsciiMathEquationExtension(ParserExtension, RenderExtension):
         latex = "\n".join(body).strip()
         if env == "eqnarray":
             latex = rf"\begin{{eqnarray}} {latex} \end{{eqnarray}}"
-        n = EquationNode(latex=latex, label=None)
+        n = EquationNode(latex=latex, label=None, numbered=(env != "equation*"))
 
         # Prefer pending label (from a preceding \label) if present; else trailing label.
         if pending_label:
@@ -1086,7 +1090,7 @@ class AsciiMathEquationExtension(ParserExtension, RenderExtension):
 
         # Determine/allocate equation number.
         eqno = meta.get("eqno")
-        if eqno is None:
+        if eqno is None and getattr(node, "numbered", True):
             # This path is primarily for equations inside twocolumns (meta is empty in core code).
             eqno = compiler.counters.next_equation()
             if getattr(node, "label", None):

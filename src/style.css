@@ -59,20 +59,34 @@ button { color: inherit; }
 .panel-heading { display: flex; align-items: flex-end; justify-content: space-between; padding: 22px 16px 14px; }
 .panel-heading h2 { margin: 3px 0 0; font-size: 17px; }
 .file-actions { display: flex; gap: 4px; }
-.file-actions button, .file-actions label { display: grid; place-items: center; width: 29px; height: 29px; color: #a9bbb1; border: 1px solid #36483e; border-radius: 3px; background: #1e2b24; cursor: pointer; }
+.file-actions button, .file-actions label { display: grid; place-items: center; min-width: 29px; height: 29px; padding: 0 6px; color: #a9bbb1; border: 1px solid #36483e; border-radius: 3px; background: #1e2b24; cursor: pointer; font-size: 9px; font-weight: 700; }
 .file-list { padding: 4px 8px; overflow: auto; }
-.file-row { width: 100%; display: flex; align-items: center; gap: 9px; padding: 8px; border: 0; border-radius: 3px; background: transparent; text-align: left; cursor: pointer; }
+.file-row { width: 100%; display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 6px 5px 6px 8px; border: 0; border-radius: 3px; background: transparent; text-align: left; cursor: pointer; }
 .file-row:hover { background: #202e26; }
 .file-row.active { background: #294033; box-shadow: inset 2px 0 #87d59e; }
+.file-row:focus-visible { outline: 1px solid #87d59e; outline-offset: -1px; }
+.file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-more { display: grid; place-items: center; width: 26px; height: 24px; margin-left: auto; padding: 0; border: 0; border-radius: 3px; color: transparent; background: transparent; cursor: pointer; letter-spacing: -1px; }
+.file-row:hover .file-more, .file-row.active .file-more, .file-more:focus-visible { color: #a9bbb1; }
+.file-more:hover { background: #3a5144; color: #e4f3ea; }
 .file-icon { flex: 0 0 auto; min-width: 29px; color: #9ab3a5; font: 600 8px 'JetBrains Mono'; }
 .file-icon.tex { color: #91dfa8; }
 .file-icon.bib { color: #e0b77c; }
 .file-icon.img { color: #9bb9e9; }
 .file-name { overflow: hidden; color: #d7e1db; font: 12px 'JetBrains Mono'; text-overflow: ellipsis; white-space: nowrap; }
 .main-tag { margin-left: auto; color: #7f9b8b; font-size: 8px; letter-spacing: .12em; }
-.file-footer { display: flex; padding: 10px; gap: 6px; border-top: 1px solid #2c3b33; }
-.file-footer button { flex: 1; padding: 7px; border: 1px solid #35483d; border-radius: 3px; background: transparent; color: #91a89b; font-size: 11px; cursor: pointer; }
+.file-footer { display: grid; padding: 10px; gap: 8px; border-top: 1px solid #2c3b33; color: #71877a; font-size: 10px; }
+.file-footer button { padding: 8px; border: 1px solid #405649; border-radius: 3px; background: #1e2b24; color: #b4c9bd; font-size: 11px; cursor: pointer; }
 .file-footer button:disabled { opacity: .35; }
+.file-context-menu { position: fixed; z-index: 30; width: 174px; padding: 6px; border: 1px solid #496052; border-radius: 6px; background: #18231d; box-shadow: 0 14px 38px #0009; color: #d8e7de; }
+.context-title { padding: 6px 9px 8px; overflow: hidden; color: #81988b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.file-context-menu button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 9px; border: 0; border-radius: 3px; color: inherit; background: transparent; text-align: left; font-size: 12px; cursor: pointer; }
+.file-context-menu button span { width: 15px; color: #88d69f; text-align: center; }
+.file-context-menu button:hover { background: #293b31; }
+.file-context-menu button.danger { color: #ef9b93; }
+.file-context-menu button.danger span { color: inherit; }
+.file-context-menu button:disabled { opacity: .35; cursor: not-allowed; }
+.context-separator { height: 1px; margin: 5px 3px; background: #304239; }
 
 .editor-panel, .preview-panel { display: grid; grid-template-rows: 43px 1fr; }
 .editor-panel { max-width: 100%; overflow: hidden; background: #151b18; }

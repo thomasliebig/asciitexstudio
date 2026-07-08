@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { zipSync } from 'fflate'
 import MonacoPane from './MonacoPane.vue'
 import {
   initProjectFs, isTextPath, listFiles, readText, removeFile, renameFile,
@@ -30,6 +31,7 @@ const installedApp = ref(false)
 const tourStep = ref(-1)
 const tourStyle = ref<Record<string, string>>({})
 const tourPlacement = ref<'right' | 'left' | 'bottom'>('right')
+const fileMenu = ref<{ path: string; x: number; y: number } | null>(null)
 const compiler = new AsciiTeXCompiler()
 let installPrompt: BeforeInstallPromptEvent | undefined
 let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -176,34 +178,87 @@ async function uploadFiles(event: Event): Promise<void> {
   queueCompile()
 }
 
-async function renameActive(): Promise<void> {
-  if (!activeFile.value) return
-  const name = window.prompt('Rename file', shortName(activePath.value))?.trim()
+async function renamePath(path = activePath.value): Promise<void> {
+  const name = window.prompt('Rename file', shortName(path))?.trim()
   if (!name) return
   const next = `/${name.replace(/^\/+/, '')}`
+  if (next !== path && files.value.some(file => file.path === next)) return void window.alert('That file already exists.')
   await flushSave()
-  await renameFile(activePath.value, next)
-  activePath.value = next
+  await renameFile(path, next)
+  if (activePath.value === path) activePath.value = next
   await refreshFiles()
   queueCompile()
 }
 
-async function deleteActive(): Promise<void> {
-  if (!activeFile.value || activePath.value === '/main.tex') return
-  if (!window.confirm(`Delete ${shortName(activePath.value)}?`)) return
-  await removeFile(activePath.value)
+async function deletePath(path = activePath.value): Promise<void> {
+  if (path === '/main.tex') return
+  if (!window.confirm(`Delete ${shortName(path)}?`)) return
+  await removeFile(path)
   await refreshFiles()
-  await selectFile('/main.tex')
+  if (activePath.value === path) await selectFile('/main.tex')
   queueCompile()
 }
 
-function downloadProject(): void {
-  const blob = new Blob([editorValue.value], { type: 'text/plain;charset=utf-8' })
+function saveBlob(blob: Blob, name: string): void {
   const anchor = document.createElement('a')
   anchor.href = URL.createObjectURL(blob)
-  anchor.download = shortName(activePath.value)
+  anchor.download = name
   anchor.click()
   URL.revokeObjectURL(anchor.href)
+}
+
+async function downloadFile(path = activePath.value): Promise<void> {
+  if (path === activePath.value) await flushSave()
+  const file = (await listFiles()).find(candidate => candidate.path === path)
+  if (!file) return
+  saveBlob(new Blob([file.data as BlobPart], { type: file.text ? 'text/plain;charset=utf-8' : 'application/octet-stream' }), shortName(path))
+}
+
+async function downloadProjectZip(): Promise<void> {
+  await flushSave()
+  const archive: Record<string, Uint8Array> = {}
+  for (const file of await listFiles()) archive[shortName(file.path)] = file.data
+  saveBlob(new Blob([zipSync(archive, { level: 6 }) as BlobPart], { type: 'application/zip' }), 'asciitex-project.zip')
+}
+
+async function duplicateFile(path = activePath.value): Promise<void> {
+  if (path === activePath.value) await flushSave()
+  const source = (await listFiles()).find(file => file.path === path)
+  if (!source) return
+  const name = shortName(path)
+  const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  const extension = dot > 0 ? name.slice(dot) : ''
+  let index = 1
+  let next = `/${stem} copy${extension}`
+  while (files.value.some(file => file.path === next)) next = `/${stem} copy ${++index}${extension}`
+  await writeBinary(next, source.data)
+  await refreshFiles()
+  await selectFile(next)
+  queueCompile()
+}
+
+function openFileMenu(event: MouseEvent, path: string): void {
+  event.preventDefault()
+  const width = 174
+  const height = 170
+  fileMenu.value = {
+    path,
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
+  }
+}
+
+function closeFileMenu(): void { fileMenu.value = null }
+
+async function runFileAction(action: 'rename' | 'duplicate' | 'download' | 'delete'): Promise<void> {
+  const path = fileMenu.value?.path
+  closeFileMenu()
+  if (!path) return
+  if (action === 'rename') await renamePath(path)
+  if (action === 'duplicate') await duplicateFile(path)
+  if (action === 'download') await downloadFile(path)
+  if (action === 'delete') await deletePath(path)
 }
 
 function startResize(event: PointerEvent): void {
@@ -353,6 +408,8 @@ onMounted(async () => {
   window.addEventListener('beforeinstallprompt', captureInstallPrompt)
   window.addEventListener('appinstalled', markInstalled)
   window.addEventListener('resize', positionTour)
+  window.addEventListener('click', closeFileMenu)
+  window.addEventListener('blur', closeFileMenu)
   await nextTick()
   if (!localStorage.getItem(tourStorageKey)) startTour()
   try {
@@ -381,6 +438,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
   window.removeEventListener('appinstalled', markInstalled)
   window.removeEventListener('resize', positionTour)
+  window.removeEventListener('click', closeFileMenu)
+  window.removeEventListener('blur', closeFileMenu)
   clearTourAnchor()
 })
 </script>
@@ -409,7 +468,7 @@ onBeforeUnmount(() => {
           class="auto-toggle" :class="{ active: autoCompile }"
           :aria-pressed="autoCompile" @click="toggleAutoCompile"
         ><span class="toggle-track"><i /></span> Auto compile</button>
-        <button class="secondary-button" @click="downloadProject">Export file</button>
+        <button class="secondary-button" @click="downloadFile()">Download file</button>
         <button class="compile-button" :disabled="status === 'building'" @click="compileProject">
           <span>▶</span> Compile
         </button>
@@ -430,24 +489,40 @@ onBeforeUnmount(() => {
           <div class="file-actions">
             <button title="New file" @click="createFile">＋</button>
             <label title="Upload files">⇧<input type="file" multiple hidden @change="uploadFiles" /></label>
+            <button title="Download project as ZIP" @click="downloadProjectZip">ZIP</button>
           </div>
         </div>
         <div class="file-list">
-          <button
+          <div
             v-for="file in files" :key="file.path"
             class="file-row" :class="{ active: file.path === activePath }"
-            @click="selectFile(file.path)"
+            role="button" tabindex="0"
+            @click="selectFile(file.path)" @keydown.enter="selectFile(file.path)"
+            @contextmenu="openFileMenu($event, file.path)"
           >
             <span class="file-icon" :class="iconFor(file.path).toLowerCase()">{{ iconFor(file.path) }}</span>
             <span class="file-name">{{ shortName(file.path) }}</span>
             <span v-if="file.path === '/main.tex'" class="main-tag">MAIN</span>
-          </button>
+            <button class="file-more" :aria-label="`Actions for ${shortName(file.path)}`" title="File actions" @click.stop="openFileMenu($event, file.path)">•••</button>
+          </div>
         </div>
         <div class="file-footer">
-          <button @click="renameActive">Rename</button>
-          <button :disabled="activePath === '/main.tex'" @click="deleteActive">Delete</button>
+          <span>{{ files.length }} files · stored locally</span>
+          <button title="Download complete project" @click="downloadProjectZip">Download ZIP</button>
         </div>
       </aside>
+
+      <div
+        v-if="fileMenu" class="file-context-menu" role="menu"
+        :style="{ left: `${fileMenu.x}px`, top: `${fileMenu.y}px` }" @click.stop
+      >
+        <div class="context-title">{{ shortName(fileMenu.path) }}</div>
+        <button role="menuitem" @click="runFileAction('rename')"><span>✎</span> Rename</button>
+        <button role="menuitem" @click="runFileAction('duplicate')"><span>⧉</span> Duplicate</button>
+        <button role="menuitem" @click="runFileAction('download')"><span>↓</span> Download</button>
+        <div class="context-separator" />
+        <button role="menuitem" class="danger" :disabled="fileMenu.path === '/main.tex'" @click="runFileAction('delete')"><span>×</span> Delete</button>
+      </div>
 
       <section class="editor-panel" data-tour="editor">
         <div class="pane-bar">

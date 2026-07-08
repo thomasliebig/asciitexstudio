@@ -264,12 +264,15 @@ def limits_over_under(op: MBox, sub: Optional[MBox], sup: Optional[MBox], gap: i
 # =========================================================
 
 DELIM_PIECES = {
-    "(": ("⎛", "⎜", "⎝"),
-    ")": ("⎞", "⎟", "⎠"),
-    "[": ("⎡", "⎢", "⎣"),
-    "]": ("⎤", "⎥", "⎦"),
-    "{": ("⎧", "⎨", "⎩"),
-    "}": ("⎫", "⎬", "⎭"),
+    # Box-drawing pieces occupy exactly one monospace cell and join on the
+    # baseline. Unicode's mathematical bracket pieces have font-dependent
+    # side bearings which visibly displace tall matrices and cases.
+    "(": ("╭", "│", "╰"),
+    ")": ("╮", "│", "╯"),
+    "[": ("┌", "│", "└"),
+    "]": ("┐", "│", "┘"),
+    "{": ("╭", "├", "╰"),
+    "}": ("╮", "┤", "╯"),
     "|": ("│", "│", "│"),
     "||": ("║", "║", "║"),
 }
@@ -284,7 +287,7 @@ def stretchy_delim(height: int, which: str) -> MBox:
 
     top, mid, bot = DELIM_PIECES.get(which, ("|", "|", "|"))
     if which in ("{", "}") and height >= 3:
-        extension = "⎪"
+        extension = "│"
         middle = height // 2
         lines = [top] + [extension] * (height - 2) + [bot]
         lines[middle] = mid

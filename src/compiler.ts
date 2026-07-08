@@ -12,7 +12,7 @@ type WorkerResponse =
   | { id: number; type: 'error'; error: string }
 
 export class AsciiTeXCompiler {
-  private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=11`)
+  private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=12`)
   private sequence = 0
   private pending = new Map<number, { resolve: (value: any) => void; reject: (reason: Error) => void }>()
 
@@ -49,8 +49,6 @@ export class AsciiTeXCompiler {
       bytes: file.data,
     }))
     const result = await this.request({ type: 'compile', files: payload, options })
-    const main = files.find(file => file.path === options.mainFile)
-    const source = main ? new TextDecoder().decode(main.data) : ''
-    return { ...result, syncMap: buildSourceSyncMap(source, result.output) }
+    return { ...result, syncMap: buildSourceSyncMap(files, options.mainFile, result.output) }
   }
 }

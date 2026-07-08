@@ -22,7 +22,7 @@ const workspaceRef = ref<HTMLElement>()
 const monacoPaneRef = ref<InstanceType<typeof MonacoPane>>()
 const paperStageRef = ref<HTMLElement>()
 const previewPreRef = ref<HTMLElement>()
-const syncMap = ref<SourceSyncMap>({ outputToSource: [], sourceToOutput: [] })
+const syncMap = ref<SourceSyncMap>({ outputToSource: [], sourceToOutput: {} })
 const copyState = ref<'idle' | 'copied' | 'error'>('idle')
 const dirty = ref(false)
 const installAvailable = ref(false)
@@ -133,17 +133,20 @@ function outputLineAt(event: MouseEvent): number {
     Math.floor((event.clientY - pre.getBoundingClientRect().top) / lineHeight)))
 }
 
-function revealSource(event: MouseEvent): void {
-  if (activePath.value !== '/main.tex') return
-  const sourceLine = syncMap.value.outputToSource[outputLineAt(event)]
-  if (sourceLine !== undefined) monacoPaneRef.value?.goToLine(sourceLine + 1)
+async function revealSource(event: MouseEvent): Promise<void> {
+  const location = syncMap.value.outputToSource[outputLineAt(event)]
+  if (!location) return
+  if (activePath.value !== location.path) {
+    await selectFile(location.path)
+    await nextTick()
+  }
+  monacoPaneRef.value?.goToLine(location.line + 1)
 }
 
 function revealOutput(sourceLine: number): void {
-  if (activePath.value !== '/main.tex') return
   const stage = paperStageRef.value
   const pre = previewPreRef.value
-  const outputLine = syncMap.value.sourceToOutput[sourceLine - 1]
+  const outputLine = syncMap.value.sourceToOutput[activePath.value]?.[sourceLine - 1]
   if (!stage || !pre || outputLine === undefined) return
   const style = window.getComputedStyle(pre)
   const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2
@@ -493,7 +496,7 @@ onBeforeUnmount(() => {
         </div>
         <div ref="paperStageRef" class="paper-stage">
           <div class="paper">
-            <pre ref="previewPreRef" title="Double-click to reveal this line in main.tex" @dblclick="revealSource">{{ preview }}</pre>
+            <pre ref="previewPreRef" title="Double-click to reveal this line in its source file" @dblclick="revealSource">{{ preview }}</pre>
           </div>
         </div>
       </section>

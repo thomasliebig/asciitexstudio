@@ -1,6 +1,6 @@
 const WORKER_BASE = new URL('./', self.location.href)
 const PYODIDE_PATH = new URL('./pyodide/', WORKER_BASE).href
-const ENGINE_VERSION = '11'
+const ENGINE_VERSION = '12'
 const ENGINE_FILES = [
   'asciitex.py',
   'asciitex_bib_extension.py',

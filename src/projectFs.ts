@@ -81,7 +81,7 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
   '/README.txt': `AsciiTeX Studio project\n\nOpen main.tex to edit the document. Files are stored in your browser.\n`,
 }
 
-seedFiles['/main.tex'] = String.raw`% !asciitex example-version=10
+seedFiles['/main.tex'] = String.raw`% !asciitex example-version=11
 % !asciitex hyphenation=hyph-en-us.pat.txt
 % !asciitex German: change the line above to hyphenation=hyph-de-1996.pat.txt
 % Lines and trailing text after an unescaped percent sign are comments.
@@ -144,8 +144,8 @@ demonstrated below. Labels attach counters; ref inserts the corresponding number
 
 \label{eq:showcase}
 \begin{equation}
-  \sum_{i=1}^{n} \frac{x_i^2 + \alpha}{1 + x_i}
-  = \frac{n(n + 1)}{2} + \sqrt{\beta}
+  \sum_{i=1}^{n} \frac{\sqrt{x_i^2 + \alpha}}{1 + x_i}
+  = \left( \begin{bmatrix} a & b \\ c & d \end{bmatrix} \right)_{k}^{2}
 \end{equation}
 
 \section*{Unnumbered elements}
@@ -205,14 +205,6 @@ Equation \ref{eq:system} with the piecewise definition below.
   \end{cases}
 \end{equation}
 
-\section{Images and float placement}
-The image uses a scaled text width, placement t for a top float, a custom palette and
-all available conversion controls. Width may also use columnwidth or a fixed number.
-
-\label{fig:asciitex}
-\includeimage[width=.72\textwidth,place=t,palette=classic,invert=false,aspect=.45,autocontrast=true,gamma=1.0,contrast=1.0,dither=false,numbered=true,caption="AsciiTeX sample image",frame=true]{image.png}
-Figure \ref{fig:asciitex} is referenced by its independent figure counter.
-
 \section{Tables using textwidth}
 Table \ref{tab:features} summarizes the examples and has its own counter.
 \label{tab:features}
@@ -255,6 +247,14 @@ Dotted rule:
 
 \section{Two-column layout}
 \begin{twocolumns}[textwidth=\textwidth,gutter=4,balance=true]
+\subsection{Top-placed column figure}
+This numbered figure is part of the balanced two-column flow. Placement t puts it at
+the top of its column; columnwidth adapts the image to the active column.
+
+\label{fig:asciitex}
+\includeimage[width=\columnwidth,place=t,palette=classic,invert=false,aspect=.45,autocontrast=true,gamma=1.0,contrast=1.0,dither=false,numbered=true,caption="AsciiTeX sample image",frame=true]{image.png}
+Figure \ref{fig:asciitex} remains referenceable through its independent figure counter.
+
 \subsection{Why text columns?}
 Two columns make compact technical notes easier to scan. Content stays in reading
 order and flows from the left column into the right column.
@@ -328,7 +328,7 @@ export async function initProjectFs(): Promise<void> {
     for (const [path, content] of Object.entries(seedFiles)) await writeText(path, content)
   } else if (names.includes('main.tex')) {
     let currentMain = await readText('/main.tex')
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=10')) {
+    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=11')) {
       await writeText('/main.tex', seedFiles['/main.tex'])
       currentMain = seedFiles['/main.tex']
     } else if (currentMain.includes('Monaco edits the project files.') && !currentMain.includes('\\includeimage')) {

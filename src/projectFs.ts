@@ -81,7 +81,7 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
   '/README.txt': `AsciiTeX Studio project\n\nOpen main.tex to edit the document. Files are stored in your browser.\n`,
 }
 
-seedFiles['/main.tex'] = String.raw`% !asciitex example-version=14
+seedFiles['/main.tex'] = String.raw`% !asciitex example-version=16
 % !asciitex hyphenation=hyph-en-us.pat.txt
 % !asciitex German: change the line above to hyphenation=hyph-de-1996.pat.txt
 % Lines and trailing text after an unescaped percent sign are comments.
@@ -100,6 +100,9 @@ Sections, subsections, and subsubsections are numbered automatically. References
 point forward or backward: Equations
 \ref{eq:showcase}--\ref{eq:cases}, Figure \ref{fig:asciitex}, Table \ref{tab:features},
 Boxes \ref{box:single}--\ref{box:double}, Diagram \ref{dia:pipeline}, and \cite{knuth1981}.
+
+Unicode text styles preserve the monospace grid: \textbf{bold text and 123},
+\textit{italic text}, \emph{emphasized text}, and \textbfit{bold italic text}.
 
 \quote{The quote command renders a short highlighted quotation.}
 \verbatim{Inline verbatim keeps     spacing, symbols, and 100% literal content.}
@@ -167,8 +170,8 @@ numbered=false & suppresses the counter
 The title is retained, but no Box number is added.
 \end{box}
 
-\begindiagram[width=.55\textwidth,height=8,place=t,numbered=false,mode=spec,caption="Unnumbered diagram",frame=true]
-{"type":"lines","x_label":"x","y_label":"y","grid":true,"lines":[{"x":[0,1,2],"y":[0,1,0],"name":"demo","ch":"*"}]}
+\begindiagram[width=.72\textwidth,height=12,place=t,numbered=false,mode=spec,caption="Unnumbered diagram",frame=true]
+{"type":"lines","x_label":"x","y_label":"y","grid":True,"lines":[{"x":[0,1,2],"y":[0,1,0],"name":"demo","ch":"*"}]}
 \enddiagram
 
 \subsection{Underbraces with labels}
@@ -325,7 +328,7 @@ export async function initProjectFs(): Promise<void> {
     for (const [path, content] of Object.entries(seedFiles)) await writeText(path, content)
   } else if (names.includes('main.tex')) {
     let currentMain = await readText('/main.tex')
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=14')) {
+    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=16')) {
       await writeText('/main.tex', seedFiles['/main.tex'])
       currentMain = seedFiles['/main.tex']
     } else if (currentMain.includes('Monaco edits the project files.') && !currentMain.includes('\\includeimage')) {

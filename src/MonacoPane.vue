@@ -24,7 +24,7 @@ onMounted(async () => {
         root: [
           [/%.*/, 'comment'],
           [/\\(?:begin|end)\s*\{[^}]+\}/, 'keyword'],
-          [/\\(?:section|subsection|subsubsection|title|header|footer|label|ref|cite|bibentry|bibitem|bibliography|bibliographystyle|input|include|includeimage|begindiagram|enddiagram|item|columnbreak|floatbarrier|hr|quote|verbatim|underbrace)\b/, 'keyword'],
+          [/\\(?:section|subsection|subsubsection|title|header|footer|label|ref|cite|bibentry|bibitem|bibliography|bibliographystyle|input|include|includeimage|begindiagram|enddiagram|item|columnbreak|floatbarrier|hr|quote|verbatim|underbrace|textbf|textit|textbfit|emph)\b/, 'keyword'],
           [/\\[A-Za-z]+/, 'type.identifier'],
           [/\[[^\]]*\]/, 'attribute.value'],
           [/\{/, { token: 'delimiter.curly', next: '@braces' }],

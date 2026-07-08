@@ -53,6 +53,87 @@ from asciitex import (
 # Utilities
 # ---------------------------------------------------------------------------
 
+def _unicode_math_style(text: str, style: str) -> str:
+    """Use Mathematical Alphanumeric Symbols where Unicode defines them."""
+    bases = {
+        "bold": (0x1D400, 0x1D41A, 0x1D7CE),
+        "italic": (0x1D434, 0x1D44E, None),
+        "bolditalic": (0x1D468, 0x1D482, None),
+    }
+    upper, lower, digits = bases[style]
+    out: List[str] = []
+    for ch in text:
+        if "A" <= ch <= "Z":
+            out.append(chr(upper + ord(ch) - ord("A")))
+        elif "a" <= ch <= "z":
+            if style == "italic" and ch == "h":
+                out.append("ℎ")
+            else:
+                out.append(chr(lower + ord(ch) - ord("a")))
+        elif digits is not None and "0" <= ch <= "9":
+            out.append(chr(digits + ord(ch) - ord("0")))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def render_unicode_text_styles(text: str) -> str:
+    r"""Expand \textbf, \textit/\emph and \textbfit, including nesting."""
+    commands = {
+        "\\textbf{": "bold",
+        "\\textit{": "italic",
+        "\\emph{": "italic",
+        "\\textbfit{": "bolditalic",
+    }
+
+    def expand(fragment: str) -> str:
+        out: List[str] = []
+        i = 0
+        while i < len(fragment):
+            matched = next(((prefix, style) for prefix, style in commands.items() if fragment.startswith(prefix, i)), None)
+            if matched is None:
+                out.append(fragment[i])
+                i += 1
+                continue
+            prefix, style = matched
+            start = i + len(prefix)
+            depth = 1
+            j = start
+            while j < len(fragment) and depth:
+                if fragment[j] == "{": depth += 1
+                elif fragment[j] == "}": depth -= 1
+                j += 1
+            if depth:
+                out.append(fragment[i])
+                i += 1
+                continue
+            out.append(_unicode_math_style(expand(fragment[start:j - 1]), style))
+            i = j
+        return "".join(out)
+
+    return expand(text)
+
+
+def _install_unicode_text_styles() -> None:
+    """Apply styles before line breaking so every styled glyph remains one cell."""
+    typesetter = getattr(__import__("asciitex"), "TypesetterAdapter", None)
+    if typesetter is None or hasattr(typesetter, "_unicode_styles_original_text"):
+        return
+    typesetter._unicode_styles_original_text = typesetter.text
+    typesetter._unicode_styles_original_section = typesetter.section
+
+    def styled_text(self, content: str, max_width: int) -> Box:
+        return self._unicode_styles_original_text(render_unicode_text_styles(content), max_width)
+
+    def styled_section(self, level: int, title: str, number: Optional[str], max_width: int) -> Box:
+        return self._unicode_styles_original_section(level, render_unicode_text_styles(title), number, max_width)
+
+    typesetter.text = styled_text
+    typesetter.section = styled_section
+
+
+_install_unicode_text_styles()
+
 _BEGIN_LIST_RE = re.compile(r"^\s*\\begin\{(itemize|enumerate)\}\s*$")
 _END_LIST_RE = re.compile(r"^\s*\\end\{(itemize|enumerate)\}\s*$")
 _ITEM_RE = re.compile(r"^\s*\\item(?:\s+(.*))?\s*$")
@@ -557,4 +638,3 @@ if not getattr(TexLikeMonospaceCompiler, "_asciitex_layout_blocks_patched", Fals
 
     TexLikeMonospaceCompiler.compile = _compile_with_extension_reset  # type: ignore[method-assign]
     TexLikeMonospaceCompiler._asciitex_layout_blocks_patched = True
-

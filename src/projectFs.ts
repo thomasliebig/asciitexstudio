@@ -352,7 +352,7 @@ export async function listFiles(): Promise<ProjectFile[]> {
   }))
 }
 
-const RENDER_CACHE_PATH = '/.asciitex-render-cache-v3.json'
+const RENDER_CACHE_PATH = '/.asciitex-render-cache-v4.json'
 
 export async function readRenderCache(): Promise<string> {
   try { return await readText(RENDER_CACHE_PATH) }

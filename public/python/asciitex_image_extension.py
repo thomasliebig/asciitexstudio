@@ -422,6 +422,9 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
         )
         w = eval_dim(width_expr, ctx, default=max(10, min(80, render_width_limit)))
         w = max(5, min(w, render_width_limit))
+        # Width always means the complete element width. A frame consumes one
+        # cell on either side; it must never grow a \textwidth element by two.
+        content_width = max(1, w - 2) if node.frame else w
 
         # Convert image to ascii
         if Image is None:
@@ -430,7 +433,7 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
             try:
                 art = image_to_ascii(
                     node.path,
-                    width=w,
+                    width=content_width,
                     palette=node.palette,
                     invert=node.invert,
                     aspect=node.aspect,
@@ -444,8 +447,8 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
                 lines = [f"[includeimage error: {e}]"]
 
         # Normalize to width
-        art_w = min(render_width_limit, max((len(x) for x in lines), default=0))
-        box_w = max(1, min(render_width_limit, max(w, art_w)))
+        art_w = min(content_width, max((len(x) for x in lines), default=0))
+        box_w = max(1, min(content_width, max(content_width, art_w)))
         lines = [(ln[:box_w]).ljust(box_w) for ln in lines]
 
         # Caption
@@ -459,7 +462,7 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
 
         # Frame
         if node.frame:
-            inner_w = max(1, min(box_w, render_width_limit))
+            inner_w = max(1, min(box_w, render_width_limit - 2))
             top = "┌" + "─" * inner_w + "┐"
             bot = "└" + "─" * inner_w + "┘"
             framed: List[str] = [top]

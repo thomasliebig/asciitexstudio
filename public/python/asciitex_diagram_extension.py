@@ -937,6 +937,9 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
         )
         w = eval_dim(width_expr, ctx, default=min(80, render_width_limit))
         w = max(10, min(w, render_width_limit))
+        # Keep the requested width invariant across every block type. The
+        # frame is part of width rather than an addition outside it.
+        content_width = max(8, w - 2) if node.frame else w
 
         h = eval_dim(getattr(node, "height", None), ctx, default=24)
         h = max(6, h)
@@ -948,7 +951,7 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
                 art = payload
                 title_hint = ""
             elif isinstance(payload, dict):
-                art = self._spec_to_plot(payload, width=w, height=h)
+                art = self._spec_to_plot(payload, width=content_width, height=h)
                 title_hint = str(payload.get("title") or payload.get("type") or "").strip()
             else:
                 raise ValueError("__diagram__ must be a dict (spec) or str (already rendered)")
@@ -958,7 +961,7 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
 
         lines = art.splitlines() if art else [""]
         art_w = max((len(x) for x in lines), default=0)
-        box_w = min(render_width_limit, max(10, min(w, max(art_w, 10))))
+        box_w = min(content_width, max(8, min(content_width, max(art_w, 8))))
         lines = [(ln[:box_w]).ljust(box_w) for ln in lines]
 
         # caption
@@ -972,7 +975,7 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
         cap_line = (caption[:box_w]).ljust(box_w)
 
         if node.frame:
-            inner_w = box_w
+            inner_w = min(box_w, render_width_limit - 2)
             top = "┌" + "─" * inner_w + "┐"
             bot = "└" + "─" * inner_w + "┘"
             framed: List[str] = [top]

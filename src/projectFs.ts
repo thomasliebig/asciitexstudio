@@ -326,53 +326,13 @@ export async function initProjectFs(): Promise<void> {
   const names = await call<string[]>(fs.readdir.bind(fs), '/')
   if (names.length === 0) {
     for (const [path, content] of Object.entries(seedFiles)) await writeText(path, content)
-  } else if (names.includes('main.tex')) {
-    let currentMain = await readText('/main.tex')
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=16')) {
-      await writeText('/main.tex', seedFiles['/main.tex'])
-      currentMain = seedFiles['/main.tex']
-    } else if (currentMain.includes('Monaco edits the project files.') && !currentMain.includes('\\includeimage')) {
-      await writeText('/main.tex', seedFiles['/main.tex'])
-    } else if (currentMain.includes('AsciiTeX sample image') && currentMain.includes('.55\\textwidth')) {
-      currentMain = currentMain
-        .replace('.55\\textwidth', '52')
-        .replace('.72\\textwidth', '72')
-      await writeText('/main.tex', currentMain)
-    }
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('\\begin{twocolumns}')) {
-      const twoColumnExample = String.raw`
-\section{Two-column layout}
-\begin{twocolumns}[textwidth=\textwidth,gutter=4,balance=true]
-\subsection{Why text columns?}
-Two columns make compact technical notes easier to scan. Content stays in reading
-order and flows from the left column into the right column.
-
-\begin{itemize}
-\item readable source
-\item compact output
-\item Unicode-native layout
-\end{itemize}
-
-\subsection{Project workflow}
-Keep the TeX source, bibliography and image assets together in the file browser.
-BrowserFS persists every file locally while Pyodide compiles the complete project.
-\end{twocolumns}
-
-`
-      const migratedMain = (await readText('/main.tex')).replace('\\bibliography{refs.bib}', `${twoColumnExample}\\bibliography{refs.bib}`)
-      await writeText('/main.tex', migratedMain)
-    }
-  }
-  const updatedNames = await call<string[]>(fs.readdir.bind(fs), '/')
-  if (!updatedNames.includes('chapter.tex')) await writeText('/chapter.tex', seedFiles['/chapter.tex'])
-  let needsExampleImage = !updatedNames.includes('image.png')
-  if (!needsExampleImage) {
-    const existing = new Uint8Array(await call<any>(fs.readFile.bind(fs), '/image.png'))
-    needsExampleImage = existing.length < 8 || existing[0] !== 0x89 || existing[1] !== 0x50 || existing[2] !== 0x4e || existing[3] !== 0x47
-  }
-  if (needsExampleImage) {
     const response = await fetch(`${import.meta.env.BASE_URL}examples/image.png`)
     if (response.ok) await writeBinary('/image.png', new Uint8Array(await response.arrayBuffer()))
+  }
+  for (const name of names) {
+    if (name.startsWith('.asciitex-render-cache') && `/${name}` !== RENDER_CACHE_PATH) {
+      await removeFile(`/${name}`)
+    }
   }
 }
 
@@ -382,12 +342,25 @@ export function isTextPath(path: string): boolean {
 }
 
 export async function listFiles(): Promise<ProjectFile[]> {
-  const names = (await call<string[]>(fs.readdir.bind(fs), '/')).sort((a, b) => a.localeCompare(b))
+  const names = (await call<string[]>(fs.readdir.bind(fs), '/'))
+    .filter(name => !name.startsWith('.asciitex-'))
+    .sort((a, b) => a.localeCompare(b))
   return Promise.all(names.map(async name => {
     const path = `/${name}`
     const buffer = await call<any>(fs.readFile.bind(fs), path)
     return { path, data: new Uint8Array(buffer), text: isTextPath(path) }
   }))
+}
+
+const RENDER_CACHE_PATH = '/.asciitex-render-cache-v3.json'
+
+export async function readRenderCache(): Promise<string> {
+  try { return await readText(RENDER_CACHE_PATH) }
+  catch { return '{"version":1,"generation":0,"entries":{},"documents":{}}' }
+}
+
+export async function writeRenderCache(content: string): Promise<void> {
+  await writeText(RENDER_CACHE_PATH, content)
 }
 
 export async function readText(path: string): Promise<string> {

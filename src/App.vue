@@ -41,9 +41,9 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
-// Replace these placeholders when publishing the website repository.
+// Published project and legal links.
 const githubUrl = 'https://github.com/thomasliebig/asciitexstudio'
-const imprintUrl = 'https://tapekuna.ai/impressum'
+const imprintUrl = 'https://tapekuna.ai/#impressum'
 const tourStorageKey = 'asciitex-studio-tour-complete-v1'
 const tourSteps = [
   { target: '[data-tour="files"]', placement: 'right' as const, title: 'Your project files', text: 'Manage the main TeX document, bibliography, images, and other assets here. Everything stays locally in your browser.' },

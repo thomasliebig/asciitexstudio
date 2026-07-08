@@ -50,4 +50,4 @@ See the parent project’s license and third-party notices before redistribution
 
 - Website: <https://thomasliebig.github.io/asciitexstudio/>
 - Source: <https://github.com/thomasliebig/asciitexstudio>
-- Imprint: <https://tapekuna.ai/impressum>
+- Imprint: <https://tapekuna.ai/#impressum>

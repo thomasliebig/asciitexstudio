@@ -1,0 +1,13 @@
+{
+  "name": "AsciiTeX Studio",
+  "short_name": "AsciiTeX",
+  "description": "Edit and compile AsciiTeX documents locally in your browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101713",
+  "theme_color": "#17231d",
+  "icons": [
+    { "src": "app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

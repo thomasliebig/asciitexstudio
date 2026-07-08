@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+"""Tables, decorated boxes, and styled horizontal rules for AsciiTeX."""
+
+import re
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from asciitex import Box, DimContext, DimExpr, Node, ParserExtension, RenderExtension, eval_dim
+
+
+@dataclass
+class TableNode(Node):
+    rows: List[List[str]]
+    width: DimExpr = r"\textwidth"
+    align: str = "lll"
+    header: bool = True
+    frame: str = "single"
+    caption: Optional[str] = None
+    label: Optional[str] = None
+
+
+@dataclass
+class DecoratedBoxNode(Node):
+    text: str
+    width: DimExpr = r"\textwidth"
+    style: str = "single"
+    title: Optional[str] = None
+    label: Optional[str] = None
+
+
+@dataclass
+class StyledRuleNode(Node):
+    width: DimExpr = r"\textwidth"
+    style: str = "single"
+
+
+_TABLE_BEGIN_RE = re.compile(r"^\\begin\{asciitable\}(\[[^\]]*\])?\s*$")
+_TABLE_END_RE = re.compile(r"^\\end\{asciitable\}\s*$")
+_BOX_BEGIN_RE = re.compile(r"^\\begin\{box\}(\[[^\]]*\])?\s*$")
+_BOX_END_RE = re.compile(r"^\\end\{box\}\s*$")
+_RULE_RE = re.compile(r"^\\hr(?:\[([^\]]*)\])?\s*$")
+
+_FRAMES = {
+    "single": ("┌", "┬", "┐", "├", "┼", "┤", "└", "┴", "┘", "─", "│"),
+    "rounded": ("╭", "┬", "╮", "├", "┼", "┤", "╰", "┴", "╯", "─", "│"),
+    "double": ("╔", "╦", "╗", "╠", "╬", "╣", "╚", "╩", "╝", "═", "║"),
+    "heavy": ("┏", "┳", "┓", "┣", "╋", "┫", "┗", "┻", "┛", "━", "┃"),
+}
+
+_RULE_CHARS = {
+    "single": "─",
+    "double": "═",
+    "heavy": "━",
+    "dashed": "╌",
+    "dotted": "·",
+    "ascii": "-",
+}
+
+
+def _strip_quotes(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def _render_width(expr: DimExpr, meta: Dict[str, Any], max_width: int) -> int:
+    text_width = int(meta.get("_text_width", max_width))
+    column_width = int(meta.get("_column_width", max_width))
+    ctx = DimContext(
+        textwidth=text_width,
+        textheight=10**9,
+        columnwidth=column_width,
+        canvaswidth=text_width,
+        canvasheight=10**9,
+    )
+    return max(8, min(eval_dim(expr, ctx, default=max_width), text_width))
+
+
+class AsciiTableExtension(ParserExtension, RenderExtension):
+    def try_parse(
+        self,
+        *,
+        parser: Any,
+        lines: List[str],
+        i: int,
+        pending_label: Optional[str],
+    ) -> Tuple[Optional[Node], int, Optional[str]]:
+        line = lines[i].strip()
+
+        table_match = _TABLE_BEGIN_RE.match(line)
+        if table_match:
+            opts = parser.parse_kv_opts(table_match.group(1))
+            body: List[str] = []
+            j = i + 1
+            while j < len(lines) and not _TABLE_END_RE.match(lines[j].strip()):
+                body.append(lines[j])
+                j += 1
+            if j >= len(lines):
+                raise ValueError(f"Unterminated asciitable beginning at line {i + 1}")
+            rows = [
+                [cell.strip() for cell in row.split("&")]
+                for row in body
+                if row.strip() and row.strip() != r"\hline"
+            ]
+            node = TableNode(
+                rows=rows,
+                width=opts.get("width", r"\textwidth"),
+                align=opts.get("align", "lll").lower(),
+                header=opts.get("header", "true").lower() in ("1", "true", "yes", "on"),
+                frame=opts.get("frame", "single").lower(),
+                caption=_strip_quotes(opts.get("caption")),
+            )
+            if pending_label:
+                node.label, pending_label = pending_label, None
+            return node, j + 1, pending_label
+
+        box_match = _BOX_BEGIN_RE.match(line)
+        if box_match:
+            opts = parser.parse_kv_opts(box_match.group(1))
+            body = []
+            j = i + 1
+            while j < len(lines) and not _BOX_END_RE.match(lines[j].strip()):
+                body.append(lines[j])
+                j += 1
+            if j >= len(lines):
+                raise ValueError(f"Unterminated box beginning at line {i + 1}")
+            node = DecoratedBoxNode(
+                text="\n".join(body).strip(),
+                width=opts.get("width", r"\textwidth"),
+                style=opts.get("style", "single").lower(),
+                title=_strip_quotes(opts.get("title")),
+            )
+            if pending_label:
+                node.label, pending_label = pending_label, None
+            return node, j + 1, pending_label
+
+        rule_match = _RULE_RE.match(line)
+        if rule_match and rule_match.group(1) is not None:
+            opts = parser.parse_kv_opts(f"[{rule_match.group(1)}]")
+            return StyledRuleNode(
+                width=opts.get("width", r"\textwidth"),
+                style=opts.get("style", "single").lower(),
+            ), i + 1, pending_label
+
+        return None, i, pending_label
+
+    def try_number(self, *, node: Node, meta: Dict[str, Any], counters: Any, refs: Any) -> bool:
+        if isinstance(node, TableNode):
+            number = getattr(node, "_asciitex_number", None)
+            if number is None:
+                number = getattr(counters, "table", 0) + 1
+                setattr(counters, "table", number)
+                setattr(node, "_asciitex_number", number)
+            meta["tableno"] = number
+        elif isinstance(node, DecoratedBoxNode):
+            number = getattr(node, "_asciitex_number", None)
+            if number is None:
+                number = getattr(counters, "box", 0) + 1
+                setattr(counters, "box", number)
+                setattr(node, "_asciitex_number", number)
+            meta["boxno"] = number
+        else:
+            return False
+        if node.label:
+            refs.register(node.label, str(number))
+        return True
+
+    def try_render(
+        self,
+        *,
+        node: Node,
+        meta: Dict[str, Any],
+        compiler: Any,
+        max_width: int,
+    ) -> Optional[Union[Box, Any]]:
+        if isinstance(node, TableNode):
+            return self._render_table(node, meta, compiler, max_width)
+        if isinstance(node, DecoratedBoxNode):
+            return self._render_box(node, meta, compiler, max_width)
+        if isinstance(node, StyledRuleNode):
+            width = _render_width(node.width, meta, max_width)
+            char = _RULE_CHARS.get(node.style, _RULE_CHARS["single"])
+            return Box.from_lines([char * width], width=width)
+        return None
+
+    def _render_box(self, node: DecoratedBoxNode, meta: Dict[str, Any], compiler: Any, max_width: int) -> Box:
+        width = _render_width(node.width, meta, max_width)
+        frame = _FRAMES.get(node.style, _FRAMES["single"])
+        tl, _, tr, _, _, _, bl, _, br, horizontal, vertical = frame
+        inner_width = max(1, width - 4)
+        inner = compiler.typesetter.text(compiler.refs.resolve_text(node.text), max_width=inner_width)
+        boxno = meta.get("boxno")
+        heading = f"Box {boxno}: {node.title}" if boxno is not None and node.title else (f"Box {boxno}" if boxno is not None else node.title)
+        title = f" {heading} " if heading else ""
+        top_fill = max(0, width - 2 - len(title))
+        top = tl + title + horizontal * top_fill + tr
+        lines = [top[:width].ljust(width)]
+        lines.extend(vertical + " " + line[:inner_width].ljust(inner_width) + " " + vertical for line in inner.lines)
+        lines.append(bl + horizontal * (width - 2) + br)
+        return Box.from_lines(lines, width=width)
+
+    def _render_table(self, node: TableNode, meta: Dict[str, Any], compiler: Any, max_width: int) -> Box:
+        width = _render_width(node.width, meta, max_width)
+        rows = [[compiler.refs.resolve_text(cell) for cell in row] for row in node.rows]
+        if not rows:
+            return Box.from_lines([], width=width)
+        column_count = max(len(row) for row in rows)
+        rows = [row + [""] * (column_count - len(row)) for row in rows]
+        available = max(column_count, width - (column_count + 1) - 2 * column_count)
+        natural = [max(len(row[col]) for row in rows) for col in range(column_count)]
+        widths = [max(1, available // column_count) for _ in range(column_count)]
+        for col in range(available % column_count):
+            widths[col] += 1
+        if sum(natural) <= available:
+            widths = natural[:]
+            spare = available - sum(widths)
+            for col in range(spare):
+                widths[col % column_count] += 1
+
+        frame = _FRAMES.get(node.frame, _FRAMES["single"])
+        tl, tj, tr, ml, mj, mr, bl, bj, br, horizontal, vertical = frame
+
+        def border(left: str, join: str, right: str) -> str:
+            return left + join.join(horizontal * (w + 2) for w in widths) + right
+
+        def render_row(row: List[str]) -> str:
+            cells: List[str] = []
+            for col, value in enumerate(row):
+                clipped = value[:widths[col]]
+                alignment = node.align[col] if col < len(node.align) else "l"
+                if alignment == "r":
+                    clipped = clipped.rjust(widths[col])
+                elif alignment == "c":
+                    clipped = clipped.center(widths[col])
+                else:
+                    clipped = clipped.ljust(widths[col])
+                cells.append(f" {clipped} ")
+            return vertical + vertical.join(cells) + vertical
+
+        lines: List[str] = []
+        if node.caption:
+            tableno = meta.get("tableno")
+            caption = f"Table {tableno}: {node.caption}" if tableno is not None else node.caption
+            lines.append(caption[:width].center(width))
+        lines.append(border(tl, tj, tr))
+        for index, row in enumerate(rows):
+            lines.append(render_row(row))
+            if index == 0 and node.header and len(rows) > 1:
+                lines.append(border(ml, mj, mr))
+        lines.append(border(bl, bj, br))
+        return Box.from_lines(lines, width=width)
+
+
+TableExtension = AsciiTableExtension

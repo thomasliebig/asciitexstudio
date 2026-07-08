@@ -81,7 +81,7 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
   '/README.txt': `AsciiTeX Studio project\n\nOpen main.tex to edit the document. Files are stored in your browser.\n`,
 }
 
-seedFiles['/main.tex'] = String.raw`% !asciitex example-version=9
+seedFiles['/main.tex'] = String.raw`% !asciitex example-version=10
 % !asciitex hyphenation=hyph-en-us.pat.txt
 % !asciitex German: change the line above to hyphenation=hyph-de-1996.pat.txt
 % Lines and trailing text after an unescaped percent sign are comments.
@@ -130,14 +130,22 @@ Enumerate creates numbered steps.
 \item Copy the Unicode output.
 \end{enumerate}
 
+\subsection{Including TeX documents}
+Input and include load another TeX document from the project filesystem. The .tex
+suffix is optional, nested paths are relative to the including document, and circular
+or escaping includes are rejected.
+
+\input{chapter}
+% Equivalent syntax: \include{chapter.tex}
+
 \subsection{Mathematics}
 Equation, eqnarray, matrices, fractions, roots, scripts, underbraces, and cases are
 demonstrated below. Labels attach counters; ref inserts the corresponding number.
 
 \label{eq:showcase}
 \begin{equation}
-  \sum_{i=1}^{n} \frac{\sqrt{x_i^2 + \alpha}}{1 + x_i}
-  = \left( \begin{bmatrix} a & b \\ c & d \end{bmatrix} \right)_{k}^{2}
+  \sum_{i=1}^{n} \frac{x_i^2 + \alpha}{1 + x_i}
+  = \frac{n(n + 1)}{2} + \sqrt{\beta}
 \end{equation}
 
 \section*{Unnumbered elements}
@@ -290,6 +298,15 @@ Bibliography renders all cited entries as a numbered reference list.
 \bibliography{refs.bib}
 \footer{Rendered with AsciiTeX}`
 
+seedFiles['/chapter.tex'] = String.raw`% This file is included by main.tex.
+\subsubsection{Content loaded from chapter.tex}
+This paragraph proves that input reads a separate project file before parsing and layout.
+
+\begin{enumerate}
+\item Keep reusable sections in their own TeX files.
+\item Include them from main.tex in document order.
+\end{enumerate}`
+
 let fs: any
 
 function call<T>(fn: (...args: any[]) => void, ...args: any[]): Promise<T> {
@@ -311,7 +328,7 @@ export async function initProjectFs(): Promise<void> {
     for (const [path, content] of Object.entries(seedFiles)) await writeText(path, content)
   } else if (names.includes('main.tex')) {
     let currentMain = await readText('/main.tex')
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=9')) {
+    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=10')) {
       await writeText('/main.tex', seedFiles['/main.tex'])
       currentMain = seedFiles['/main.tex']
     } else if (currentMain.includes('Monaco edits the project files.') && !currentMain.includes('\\includeimage')) {
@@ -347,6 +364,7 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
     }
   }
   const updatedNames = await call<string[]>(fs.readdir.bind(fs), '/')
+  if (!updatedNames.includes('chapter.tex')) await writeText('/chapter.tex', seedFiles['/chapter.tex'])
   let needsExampleImage = !updatedNames.includes('image.png')
   if (!needsExampleImage) {
     const existing = new Uint8Array(await call<any>(fs.readFile.bind(fs), '/image.png'))

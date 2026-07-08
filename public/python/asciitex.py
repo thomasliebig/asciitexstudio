@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import os
 from dataclasses import dataclass, field
 from math import inf
 from collections import OrderedDict
@@ -1794,6 +1795,70 @@ def format_bibentry(key: str, bibfiles: List[str]) -> str:
 # Compiler
 # ============================================================
 
+_TEX_INCLUDE_RE = re.compile(r"^\s*\\(?:input|include)\{([^}]+)\}\s*(?:%.*)?$")
+
+
+def expand_tex_includes(
+    src: str,
+    *,
+    base_dir: Optional[str] = None,
+    root_dir: Optional[str] = None,
+    stack: Optional[List[str]] = None,
+) -> str:
+    """Expand standalone ``\input`` and ``\include`` commands recursively."""
+    base = os.path.abspath(base_dir or os.getcwd())
+    root = os.path.abspath(root_dir or base)
+    active = list(stack or [])
+    output: List[str] = []
+    raw_end: Optional[str] = None
+
+    for line in src.splitlines():
+        stripped = line.strip()
+        if raw_end is not None:
+            output.append(line)
+            if stripped == raw_end:
+                raw_end = None
+            continue
+        if stripped == r"\begin{code}":
+            raw_end = r"\end{code}"
+            output.append(line)
+            continue
+        if stripped == r"\begin{verbatim}":
+            raw_end = r"\end{verbatim}"
+            output.append(line)
+            continue
+        if stripped.startswith(r"\begindiagram"):
+            raw_end = r"\enddiagram"
+            output.append(line)
+            continue
+
+        match = _TEX_INCLUDE_RE.match(line)
+        if not match:
+            output.append(line)
+            continue
+
+        name = match.group(1).strip()
+        if not os.path.splitext(name)[1]:
+            name += ".tex"
+        target = os.path.abspath(os.path.join(base, name))
+        if os.path.commonpath([root, target]) != root:
+            raise ValueError(f"Included TeX file escapes project root: {name}")
+        if target in active:
+            chain = " -> ".join(active + [target])
+            raise ValueError(f"Circular TeX include: {chain}")
+        if not os.path.isfile(target):
+            raise FileNotFoundError(f"Included TeX file not found: {name}")
+        with open(target, "r", encoding="utf-8") as included:
+            nested = expand_tex_includes(
+                included.read(),
+                base_dir=os.path.dirname(target),
+                root_dir=root,
+                stack=active + [target],
+            )
+        output.append(nested)
+
+    return "\n".join(output)
+
 class TexLikeMonospaceCompiler:
     def __init__(
         self,
@@ -1818,6 +1883,7 @@ class TexLikeMonospaceCompiler:
         margin_bottom: int = 1,
         line_gap: int = 1,
     ) -> str:
+        src = expand_tex_includes(src)
         nodes = self.parser.parse(src)
 
         auto_height = canvas_height is None

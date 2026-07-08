@@ -12,7 +12,7 @@ type WorkerResponse =
   | { id: number; type: 'error'; error: string }
 
 export class AsciiTeXCompiler {
-  private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=10`)
+  private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=11`)
   private sequence = 0
   private pending = new Map<number, { resolve: (value: any) => void; reject: (reason: Error) => void }>()
 

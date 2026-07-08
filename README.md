@@ -14,6 +14,8 @@ The web application was developed with the assistance of a coding agent. The age
 - local-first project persistence in IndexedDB
 - installable Progressive Web App
 - images, diagrams, tables, boxes, mathematics, bibliography and cross-references
+- modular TeX documents through recursive `\input{...}` and `\include{...}`
+- numbered and unnumbered sections, equations, figures, diagrams, tables and boxes
 
 ## Architecture
 

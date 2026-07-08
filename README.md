@@ -42,6 +42,8 @@ npm run build
 
 The generated site is written to `dist/`. Progressive Web App installation requires HTTPS in production; localhost is accepted during development.
 
+For Chrome DevTools snippets that inspect BrowserFS files, cache entries, access timestamps, and cache hits, see [Cache and BrowserFS debugging](docs/CACHE_AND_BROWSERFS_DEBUGGING.md).
+
 ## Relationship to AsciiTeX
 
 This directory contains the browser application around AsciiTeX. Python engine files served to Pyodide live in `public/python/` and mirror the corresponding compiler sources in the parent project. When changing the engine, keep both copies synchronized and increment the engine version used by the worker so browsers do not retain stale code.

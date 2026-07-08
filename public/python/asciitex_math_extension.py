@@ -271,7 +271,7 @@ DELIM_PIECES = {
     ")": ("╮", "│", "╯"),
     "[": ("┌", "│", "└"),
     "]": ("┐", "│", "┘"),
-    "{": ("╭", "├", "╰"),
+    "{": ("╭", "┤", "╰"),
     "}": ("╮", "┤", "╯"),
     "|": ("│", "│", "│"),
     "||": ("║", "║", "║"),
@@ -1284,4 +1284,6 @@ def _install_ordered_twocolumns_patch() -> None:
         LayoutEngine._layout_two_columns_orig = LayoutEngine.layout_two_columns
         LayoutEngine.layout_two_columns = layout_two_columns_ordered
 
-_install_ordered_twocolumns_patch()
+# The current core layout already preserves stream order, accounts for float
+# heights while balancing, and implements real top-float placement.  The old
+# compatibility patch above predates that implementation and must not override it.

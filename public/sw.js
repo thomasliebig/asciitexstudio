@@ -1,4 +1,4 @@
-const CACHE_NAME = 'asciitex-studio-v4'
+const CACHE_NAME = 'asciitex-studio-v5'
 const APP_ROOT = new URL('./', self.location.href).href
 const APP_SHELL = [APP_ROOT, new URL('manifest.webmanifest', APP_ROOT).href, new URL('app-icon.svg', APP_ROOT).href]
 

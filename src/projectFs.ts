@@ -81,7 +81,7 @@ BrowserFS persists every file locally while Pyodide compiles the complete projec
   '/README.txt': `AsciiTeX Studio project\n\nOpen main.tex to edit the document. Files are stored in your browser.\n`,
 }
 
-seedFiles['/main.tex'] = String.raw`% !asciitex example-version=11
+seedFiles['/main.tex'] = String.raw`% !asciitex example-version=14
 % !asciitex hyphenation=hyph-en-us.pat.txt
 % !asciitex German: change the line above to hyphenation=hyph-de-1996.pat.txt
 % Lines and trailing text after an unescaped percent sign are comments.
@@ -247,13 +247,23 @@ Dotted rule:
 
 \section{Two-column layout}
 \begin{twocolumns}[textwidth=\textwidth,gutter=4,balance=true]
-\subsection{Top-placed column figure}
-This numbered figure is part of the balanced two-column flow. Placement t puts it at
-the top of its column; columnwidth adapts the image to the active column.
-
+% A t float is placed at the top; columnwidth adapts it to the active column.
+% It remains part of the balanced two-column flow and keeps its figure counter.
 \label{fig:asciitex}
 \includeimage[width=\columnwidth,place=t,palette=classic,invert=false,aspect=.45,autocontrast=true,gamma=1.0,contrast=1.0,dither=false,numbered=true,caption="AsciiTeX sample image",frame=true]{image.png}
-Figure \ref{fig:asciitex} remains referenceable through its independent figure counter.
+% A second t float is assigned to the other column top during balancing.
+\label{dia:pipeline}
+\begindiagram[width=\columnwidth,height=15,place=t,mode=spec,caption="Compilation pipeline",frame=true]
+{
+  "type": "lines",
+  "title": "Pipeline",
+  "x_label": "stage",
+  "y_label": "progress",
+  "grid": True,
+  "legend": False,
+  "lines": [{"x": [0, 1, 2, 3, 4], "y": [0.2, 1.4, 2.7, 3.4, 4.6], "name": "pipeline", "ch": "•"}]
+}
+\enddiagram
 
 \subsection{Why text columns?}
 Two columns make compact technical notes easier to scan. Content stays in reading
@@ -270,20 +280,7 @@ Keep the TeX source, bibliography and image assets together in the file browser.
 BrowserFS persists every file locally while Pyodide compiles the complete project.
 
 \subsection{Column-width diagram}
-The plot below uses the active \columnwidth instead of the full text width.
-
-\label{dia:pipeline}
-\begindiagram[width=\columnwidth,height=15,place=h,mode=spec,caption="Compilation pipeline",frame=true]
-{
-  "type": "lines",
-  "title": "Pipeline",
-  "x_label": "stage",
-  "y_label": "progress",
-  "grid": True,
-  "legend": False,
-  "lines": [{"x": [0, 1, 2, 3, 4], "y": [0.2, 1.4, 2.7, 3.4, 4.6], "name": "pipeline", "ch": "•"}]
-}
-\enddiagram
+The top-placed plot uses the active \columnwidth instead of the full text width.
 Diagram \ref{dia:pipeline} remains referenceable from either column and from full-width text.
 \end{twocolumns}
 
@@ -328,7 +325,7 @@ export async function initProjectFs(): Promise<void> {
     for (const [path, content] of Object.entries(seedFiles)) await writeText(path, content)
   } else if (names.includes('main.tex')) {
     let currentMain = await readText('/main.tex')
-    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=11')) {
+    if (currentMain.includes('AsciiTeX sample image') && !currentMain.includes('example-version=14')) {
       await writeText('/main.tex', seedFiles['/main.tex'])
       currentMain = seedFiles['/main.tex']
     } else if (currentMain.includes('Monaco edits the project files.') && !currentMain.includes('\\includeimage')) {

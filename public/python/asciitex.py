@@ -865,10 +865,14 @@ class TexLikeParser:
         if not s:
             return {}
         out: Dict[str, str] = {}
+        last_key: Optional[str] = None
         for part in s.split(","):
             if "=" in part:
                 k, v = part.split("=", 1)
-                out[k.strip()] = v.strip()
+                last_key = k.strip()
+                out[last_key] = v.strip()
+            elif last_key and part.strip():
+                out[last_key] += "," + part.strip()
         return out
 
     _cmd_section = re.compile(r"^\\(section|subsection|subsubsection)(\*)?\{(.*)\}\s*$")

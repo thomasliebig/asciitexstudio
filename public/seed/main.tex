@@ -146,11 +146,12 @@ longasciitable & Long cell content is formatted through the paragraph wrapper, s
 borders=outer & Draws only the outside border and avoids internal vertical grid lines for a cleaner reading table.
 \end{longasciitable}
 
-\begin{longasciitable}[width=\textwidth,numbered=false,style=dashed,borders=top,bottom,header,caption="Unnumbered dashed long table"]
+\begin{longasciitable}[width=\textwidth,numbered=false,style=dashed,borders=rows,caption="Unnumbered dashed long table"]
 Border option & Effect
 none & Omits table border lines entirely while preserving column spacing.
-top,bottom,header & Draws only horizontal rules above, below, and after the header row.
+rows & Draws horizontal lines between every table row. Use grid for both row and column lines.
 style=dashed & Uses dashed horizontal and vertical border glyphs.
+Manual linebreaks & Use \\ inside a cell for a line break, and \\ \\ for an empty line.
 \end{longasciitable}
 
 Border styles are split into glyph style and placement: style=single, double, heavy,

@@ -180,6 +180,53 @@ def _parse_borders(value: str) -> BorderSpec:
     return BorderSpec(top=top, bottom=bottom, left=left, right=right, header=header, rows=rows, cols=cols)
 
 
+def _split_cell_blocks(value: str) -> List[Optional[str]]:
+    """Split table cell text on TeX line breaks.
+
+    ``\\`` starts a new visual line inside the cell. ``\\ \\`` inserts an empty
+    line. The marker is intentionally handled only by table cells so ordinary
+    prose keeps its existing TeX-ish parsing behavior.
+    """
+    marker = "\uE000"
+    protected = re.sub(r"\\\\\s+\\\\", f"{marker}{marker}", value)
+    protected = re.sub(r"\\\\", marker, protected)
+    blocks: List[Optional[str]] = []
+    for part in protected.split(marker):
+        text = " ".join(part.split())
+        blocks.append(text if text else None)
+    return blocks or [""]
+
+
+def _wrap_cell_text(value: str, width: int) -> List[str]:
+    """Greedy, ragged-right cell wrapping without hyphenation or justification."""
+    lines: List[str] = []
+    for block in _split_cell_blocks(value):
+        if block is None:
+            lines.append("")
+            continue
+        words = block.split()
+        if not words:
+            lines.append("")
+            continue
+        current = ""
+        for word in words:
+            while len(word) > width:
+                if current:
+                    lines.append(current)
+                    current = ""
+                lines.append(word[:width])
+                word = word[width:]
+            candidate = word if not current else f"{current} {word}"
+            if len(candidate) <= width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        lines.append(current)
+    return lines or [""]
+
+
 class AsciiTableExtension(ParserExtension, RenderExtension):
     def try_parse(
         self,
@@ -374,8 +421,7 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
         rendered_cells: List[List[str]] = []
         for col, value in enumerate(row):
             if long:
-                cell = compiler.typesetter.text(value, max_width=widths[col]).lines or [""]
-                rendered_cells.append([line[:widths[col]] for line in cell])
+                rendered_cells.append([line[:widths[col]] for line in _wrap_cell_text(value, widths[col])])
             else:
                 rendered_cells.append([value[:widths[col]]])
         height = max(len(cell) for cell in rendered_cells)

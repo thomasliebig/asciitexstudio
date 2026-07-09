@@ -1049,7 +1049,7 @@ class TexLikeParser:
             m = self._cmd_bibentry.match(line.strip())
             if m:
                 flush_text(text_buf)
-                files = [part.strip() for part in (m.group(1) or "refs.bib").split(",") if part.strip()]
+                files = [part.strip() for part in (m.group(1) or "").split(",") if part.strip()]
                 nodes.append(BibEntryNode(key=m.group(2).strip(), bibfiles=files))
                 i += 1
                 continue
@@ -1889,6 +1889,23 @@ class TexLikeMonospaceCompiler:
     ) -> str:
         src = expand_tex_includes(src)
         nodes = self.parser.parse(src)
+        document_bibfiles: List[str] = []
+        for n in nodes:
+            if isinstance(n, BibNode):
+                for bibfile in n.bibfiles:
+                    if bibfile not in document_bibfiles:
+                        document_bibfiles.append(bibfile)
+            elif isinstance(n, TwoColumnNode):
+                for ch in n.children:
+                    if isinstance(ch, BibNode):
+                        for bibfile in ch.bibfiles:
+                            if bibfile not in document_bibfiles:
+                                document_bibfiles.append(bibfile)
+        if not document_bibfiles:
+            document_bibfiles = ["refs.bib"]
+
+        def bibentry_files(node: BibEntryNode) -> List[str]:
+            return node.bibfiles or document_bibfiles
 
         auto_height = canvas_height is None
         initial_height = (margin_top + margin_bottom + 10) if auto_height else int(canvas_height)
@@ -2223,7 +2240,7 @@ class TexLikeMonospaceCompiler:
                         continue
 
                     if isinstance(child, BibEntryNode):
-                        box = self.typesetter.text(format_bibentry(child.key, child.bibfiles), max_width=col_w)
+                        box = self.typesetter.text(format_bibentry(child.key, bibentry_files(child)), max_width=col_w)
                         box._role = "text"
                         stream_items.append(box)
                         continue
@@ -2272,7 +2289,7 @@ class TexLikeMonospaceCompiler:
                 render_items.extend(bib_boxes)
 
             elif isinstance(n, BibEntryNode):
-                box = self.typesetter.text(format_bibentry(n.key, n.bibfiles), max_width=inner_width)
+                box = self.typesetter.text(format_bibentry(n.key, bibentry_files(n)), max_width=inner_width)
                 box._role = "text"
                 render_items.append(box)
 

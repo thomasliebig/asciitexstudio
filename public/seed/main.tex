@@ -206,7 +206,8 @@ Diagram \ref{dia:pipeline} remains referenceable from either column and from ful
 
 \section{Bibliography syntax}
 The cite command inserts a numbered citation. Bibentry prints one complete entry inline
-without a reference number; the optional file list defaults to refs.bib.
+without a reference number; if no optional file list is given, it uses the bibliography
+files from this document. You may override that with \bibentry[refs.bib]{knuth1981}.
 
 \bibentry{knuth1981}
 

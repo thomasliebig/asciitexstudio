@@ -44,6 +44,18 @@ The generated site is written to `dist/`. Progressive Web App installation requi
 
 For Chrome DevTools snippets that inspect BrowserFS files, cache entries, access timestamps, and cache hits, see [Cache and BrowserFS debugging](docs/CACHE_AND_BROWSERFS_DEBUGGING.md).
 
+## Starter project files
+
+The initial BrowserFS project is seeded from files in `public/seed/`. To customize the
+files that a fresh installation receives, edit:
+
+- `public/seed/manifest.json` for the list of files and their target BrowserFS paths
+- `public/seed/main.tex`, `chapter.tex`, `refs.bib`, and `README.txt` for text content
+- any public asset referenced by the manifest, for example `public/examples/image.png`
+
+Seed files are installed only when the browser project filesystem is empty. Existing
+local projects are never overwritten on reload.
+
 ## Relationship to AsciiTeX
 
 This directory contains the browser application around AsciiTeX. Python engine files served to Pyodide live in `public/python/` and mirror the corresponding compiler sources in the parent project. When changing the engine, keep both copies synchronized and increment the engine version used by the worker so browsers do not retain stale code.

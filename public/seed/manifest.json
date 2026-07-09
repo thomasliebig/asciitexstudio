@@ -1,0 +1,9 @@
+{
+  "files": [
+    { "path": "/main.tex", "url": "seed/main.tex", "text": true },
+    { "path": "/chapter.tex", "url": "seed/chapter.tex", "text": true },
+    { "path": "/refs.bib", "url": "seed/refs.bib", "text": true },
+    { "path": "/README.txt", "url": "seed/README.txt", "text": true },
+    { "path": "/image.png", "url": "examples/image.png", "text": false }
+  ]
+}

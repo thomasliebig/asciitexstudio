@@ -41,6 +41,7 @@ from asciitex import (
     DiagramNode,
     TwoColumnNode,
     BibNode,
+    BibEntryNode,
     Box,
     FloatItem,
     TexLikeMonospaceCompiler,
@@ -583,6 +584,11 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
             return self._render_item_children(child.children, compiler=compiler, max_width=max_width, depth=depth + 1)
 
         if isinstance(child, BibNode):
+            return None
+
+        if isinstance(child, BibEntryNode):
+            if hasattr(compiler, "format_bibentry_node"):
+                return compiler.typesetter.text(compiler.format_bibentry_node(child), max_width=max_width)
             return None
 
         return None

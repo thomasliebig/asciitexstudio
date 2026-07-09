@@ -1871,10 +1871,14 @@ class TexLikeMonospaceCompiler:
         self.counters = Counters()
         self.refs = ReferenceResolver()
         self.cite_numbers: "OrderedDict[str, int]" = OrderedDict()
+        self.document_bibfiles: List[str] = ["refs.bib"]
 
     def resolve_inline_text(self, text: str) -> str:
         """Resolve cross-references and citations for visible prose-like text."""
         return _replace_cites(self.refs.resolve_text(text), self.cite_numbers)
+
+    def format_bibentry_node(self, node: BibEntryNode) -> str:
+        return format_bibentry(node.key, node.bibfiles or self.document_bibfiles)
 
     def compile(
         self,
@@ -1903,6 +1907,7 @@ class TexLikeMonospaceCompiler:
                                 document_bibfiles.append(bibfile)
         if not document_bibfiles:
             document_bibfiles = ["refs.bib"]
+        self.document_bibfiles = document_bibfiles
 
         def bibentry_files(node: BibEntryNode) -> List[str]:
             return node.bibfiles or document_bibfiles

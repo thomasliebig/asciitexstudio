@@ -211,6 +211,14 @@ files from this document. You may override that with \bibentry[refs.bib]{knuth19
 
 \bibentry{knuth1981}
 
+Bibentry can also be used inside lists.
+\begin{itemize}
+\item Inline reference entry:
+\bibentry{knuth1981}
+\item Explicit bibliography file:
+\bibentry[refs.bib]{knuth1981}
+\end{itemize}
+
 Bibliography renders all cited entries as a numbered reference list.
 \bibliographystyle{unsrt}
 \bibliography{refs.bib}

@@ -664,7 +664,7 @@ class TypesetterAdapter:
 
         return Box.from_lines(out_lines, width=max_width)
 
-    def section(self, level: int, title: str, number: Optional[str], max_width: int) -> Box:
+    def _legacy_section_single_line(self, level: int, title: str, number: Optional[str], max_width: int) -> Box:
         prefix = f"{number} " if number else ""
         if level == 1:
             line = (prefix + title).upper()
@@ -672,6 +672,46 @@ class TypesetterAdapter:
             return Box.from_lines([line[:max_width], underline.ljust(max_width)], width=max_width)
         line = prefix + title
         return Box.from_lines([line[:max_width].ljust(max_width)], width=max_width)
+
+    def _legacy_section_wrapped(self, level: int, title: str, number: Optional[str], max_width: int) -> Box:
+        prefix = f"{number} " if number else ""
+
+        def wrap_heading(text: str, width: int, indent: int = 0) -> List[str]:
+            words = text.split()
+            if not words:
+                return [""]
+            lines: List[str] = []
+            current = ""
+            current_width = width
+            for word in words:
+                while len(word) > current_width:
+                    if current:
+                        lines.append(current)
+                        current = ""
+                        current_width = max(8, width - indent)
+                    lines.append(word[:current_width])
+                    word = word[current_width:]
+                candidate = word if not current else f"{current} {word}"
+                if len(candidate) <= current_width:
+                    current = candidate
+                else:
+                    if current:
+                        lines.append(current)
+                    current = word
+                    current_width = max(8, width - indent)
+            if current:
+                lines.append(current)
+            return lines
+
+        if level == 1:
+            wrapped = wrap_heading((prefix + title).upper(), max_width)
+            underline = "─" * min(max_width, max((len(line) for line in wrapped), default=0))
+            return Box.from_lines(wrapped + [underline.ljust(max_width)], width=max_width)
+        indent = len(prefix)
+        wrapped = wrap_heading(prefix + title, max_width, indent=indent)
+        if indent and len(wrapped) > 1:
+            wrapped = [wrapped[0]] + [(" " * indent + line)[:max_width] for line in wrapped[1:]]
+        return Box.from_lines([line[:max_width].ljust(max_width) for line in wrapped], width=max_width)
 
     def section(self, level: int, title: str, number: Optional[str], max_width: int) -> Box:
         prefix = f"{number} " if number else ""
@@ -705,7 +745,8 @@ class TypesetterAdapter:
 
         if level == 1:
             wrapped = wrap_heading((prefix + title).upper(), max_width)
-            underline = "â”€" * min(max_width, max((len(line) for line in wrapped), default=0))
+            underline_len = min(max_width, max((len(line.rstrip()) for line in wrapped), default=0))
+            underline = "\u2500" * underline_len
             return Box.from_lines(wrapped + [underline.ljust(max_width)], width=max_width)
         indent = len(prefix)
         wrapped = wrap_heading(prefix + title, max_width, indent=indent)

@@ -479,20 +479,29 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
         depth: int,
     ) -> Box:
         lines: List[str] = []
+        split_blocks: List[Box] = []
         for idx, item in enumerate(node.items, start=1):
             marker = self._marker_for(node.kind, depth, idx)
             indent = len(marker) + 1
             inner_w = max(10, max_width - indent)
             child_box = self._render_item_children(item.children, compiler=compiler, max_width=inner_w, depth=depth + 1)
             child_lines = child_box.lines or ["".ljust(inner_w)]
+            item_lines: List[str] = []
             first = f"{marker} {child_lines[0][:inner_w].ljust(inner_w)}"
-            lines.append(first[:max_width].ljust(max_width))
+            item_lines.append(first[:max_width].ljust(max_width))
             follow_prefix = " " * indent
             for ln in child_lines[1:]:
-                lines.append((follow_prefix + ln[:inner_w]).ljust(max_width))
+                item_lines.append((follow_prefix + ln[:inner_w]).ljust(max_width))
+            item_box = Box.from_lines(item_lines, width=max_width)
+            item_box._role = "list-item"
+            split_blocks.append(item_box)
+            lines.extend(item_lines)
             if idx != len(node.items):
                 lines.append("".ljust(max_width))
-        return Box.from_lines(lines, width=max_width)
+        box = Box.from_lines(lines, width=max_width)
+        box._role = "list"
+        box._split_blocks = split_blocks
+        return box
 
     def _render_item_children(
         self,

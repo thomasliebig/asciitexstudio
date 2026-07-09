@@ -673,6 +673,46 @@ class TypesetterAdapter:
         line = prefix + title
         return Box.from_lines([line[:max_width].ljust(max_width)], width=max_width)
 
+    def section(self, level: int, title: str, number: Optional[str], max_width: int) -> Box:
+        prefix = f"{number} " if number else ""
+
+        def wrap_heading(text: str, width: int, indent: int = 0) -> List[str]:
+            words = text.split()
+            if not words:
+                return [""]
+            lines: List[str] = []
+            current = ""
+            current_width = width
+            for word in words:
+                while len(word) > current_width:
+                    if current:
+                        lines.append(current)
+                        current = ""
+                        current_width = max(8, width - indent)
+                    lines.append(word[:current_width])
+                    word = word[current_width:]
+                candidate = word if not current else f"{current} {word}"
+                if len(candidate) <= current_width:
+                    current = candidate
+                else:
+                    if current:
+                        lines.append(current)
+                    current = word
+                    current_width = max(8, width - indent)
+            if current:
+                lines.append(current)
+            return lines
+
+        if level == 1:
+            wrapped = wrap_heading((prefix + title).upper(), max_width)
+            underline = "â”€" * min(max_width, max((len(line) for line in wrapped), default=0))
+            return Box.from_lines(wrapped + [underline.ljust(max_width)], width=max_width)
+        indent = len(prefix)
+        wrapped = wrap_heading(prefix + title, max_width, indent=indent)
+        if indent and len(wrapped) > 1:
+            wrapped = [wrapped[0]] + [(" " * indent + line)[:max_width] for line in wrapped[1:]]
+        return Box.from_lines([line[:max_width].ljust(max_width) for line in wrapped], width=max_width)
+
     def equation(self, latex: str, number: Optional[int], max_width: int) -> Box:
         tag = f"({number})" if number is not None else ""
         inner = latex.strip()
@@ -1560,6 +1600,14 @@ class LayoutEngine:
                     idx += 1
                     continue
 
+                if balance and tag == "L" and lc.y > y0 and not switched:
+                    projected = eff_y(lc, resB_L) - y0 + item.height + gap_after(item)
+                    if projected > target_h and (auto_height or item.height <= remaining_for(rc, resB_R)):
+                        switched = True
+                        c, fq, tag = rc, fqR, "R"
+                        resB = resB_R
+                        place_top_floats(c, fq, resB, require_text_lines=2)
+
                 if self._box_role(item) == "section":
                     nxt = next_text_box(idx + 1)
                     keep_lines = 2 if nxt is None else min(2, nxt.height)
@@ -2124,7 +2172,11 @@ class TexLikeMonospaceCompiler:
                         if rendered_child is not None:
                             break
                     if rendered_child is not None:
-                        stream_items.append(rendered_child)
+                        split_blocks = getattr(rendered_child, "_split_blocks", None)
+                        if split_blocks:
+                            stream_items.extend(split_blocks)
+                        else:
+                            stream_items.append(rendered_child)
                         continue
 
                     if isinstance(child, TextNode):

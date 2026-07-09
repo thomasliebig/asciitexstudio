@@ -455,7 +455,7 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
 
     def _replace_cites_if_available(self, compiler: TexLikeMonospaceCompiler, text: str) -> str:
         cite_map = getattr(compiler, "cite_numbers", None)
-        if not cite_map:
+        if cite_map is None:
             return text
         # reuse core helper if available in caller output; simple local version otherwise
         def repl(m: re.Match[str]) -> str:

@@ -136,6 +136,27 @@ Diagram & begindiagram & columnwidth
 Table & asciitable & textwidth
 \end{asciitable}
 
+Long tables wrap cell content instead of clipping it. They use the same table counter
+unless numbered=false is set.
+
+\label{tab:long}
+\begin{longasciitable}[width=\textwidth,align=ll,header=true,style=single,borders=outer,caption="Wrapped long table"]
+Column & Description
+longasciitable & Long cell content is formatted through the paragraph wrapper, so prose can span several table lines while keeping the column grid stable.
+borders=outer & Draws only the outside border and avoids internal vertical grid lines for a cleaner reading table.
+\end{longasciitable}
+
+\begin{longasciitable}[width=\textwidth,numbered=false,style=dashed,borders=top,bottom,header,caption="Unnumbered dashed long table"]
+Border option & Effect
+none & Omits table border lines entirely while preserving column spacing.
+top,bottom,header & Draws only horizontal rules above, below, and after the header row.
+style=dashed & Uses dashed horizontal and vertical border glyphs.
+\end{longasciitable}
+
+Border styles are split into glyph style and placement: style=single, double, heavy,
+rounded, dashed, or ascii; borders=all, grid, outer, none, horizontal, vertical,
+top,bottom,left,right,header,rows,cols, or combinations such as top,bottom.
+
 \section{Decorated boxes}
 Boxes use a separate counter: Box \ref{box:single}, Box \ref{box:rounded}, and Box \ref{box:double}.
 \label{box:single}

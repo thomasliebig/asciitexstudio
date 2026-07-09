@@ -1387,7 +1387,7 @@ class LayoutEngine:
             def choose_text_column() -> Tuple[LayoutCursor, FloatQueue, str]:
                 nonlocal switched
                 if not balance:
-                    if lc.y < lc.region_height:
+                    if not switched and lc.y < lc.region_height:
                         return lc, fqL, "L"
                     return rc, fqR, "R"
 
@@ -2197,28 +2197,17 @@ class TexLikeMonospaceCompiler:
                         continue
 
                     if isinstance(child, (BibNode, ManualBibliographyNode)):
-                        # Flush everything before bibliography so the bibliography cannot "float up"
-                        # into the currently shorter column (preserves reading order).
-                        if stream_items:
-                            cursor = engine.layout_two_columns(
-                                items=stream_items,
-                                cursor=cursor,
-                                col_width=col_w,
-                                gutter=gut,
-                                balance=n.balance,
-                                line_gap=line_gap,
-                                auto_height=auto_height,
-                            )
-                            stream_items = []
-
                         entries = (
                             load_bib_entries(child.bibfiles, self.cite_numbers)
                             if isinstance(child, BibNode)
                             else format_manual_bib_entries(child.entries, self.cite_numbers, self.refs)
                         )
-                        # Flowable bibliography: title + one box per entry
+                        # Bibliography blocks stay in the same ordered stream as
+                        # surrounding content. In particular, do not flush and
+                        # restart layout_two_columns: a restart resets the local
+                        # cursors and can jump from the right column back left.
                         box = Box.from_lines(["REFERENCES", "─" * len("REFERENCES")], width=col_w)
-                        box._role = "section"
+                        box._role = "text"
                         stream_items.append(box)
                         for e in entries:
                             box = self.typesetter.text(e, max_width=col_w)

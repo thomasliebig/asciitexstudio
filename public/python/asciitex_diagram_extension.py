@@ -971,7 +971,7 @@ class DiagramPlotExtension(ParserExtension, NumberingExtension, RenderExtension)
             caption = f"Diagram {dno}: {cap_core}" if dno is not None else cap_core
         elif dno is not None:
             caption = f"Diagram {dno}: {caption}"
-        caption = compiler.refs.resolve_text(caption) if hasattr(compiler, "refs") else caption
+        caption = compiler.resolve_inline_text(caption) if hasattr(compiler, "resolve_inline_text") else (compiler.refs.resolve_text(caption) if hasattr(compiler, "refs") else caption)
         cap_line = (caption[:box_w]).ljust(box_w)
 
         if node.frame:

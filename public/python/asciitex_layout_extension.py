@@ -454,6 +454,8 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
         return None
 
     def _replace_cites_if_available(self, compiler: TexLikeMonospaceCompiler, text: str) -> str:
+        if hasattr(compiler, "resolve_inline_text"):
+            return compiler.resolve_inline_text(text)
         cite_map = getattr(compiler, "cite_numbers", None)
         if cite_map is None:
             return text

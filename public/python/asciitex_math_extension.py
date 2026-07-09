@@ -1100,7 +1100,7 @@ class AsciiMathEquationExtension(ParserExtension, RenderExtension):
                 compiler.refs.register(node.label, str(eqno))
 
         tag = f"({eqno})" if eqno is not None else ""
-        latex = compiler.refs.resolve_text(node.latex) if hasattr(compiler, "refs") else node.latex
+        latex = compiler.resolve_inline_text(node.latex) if hasattr(compiler, "resolve_inline_text") else (compiler.refs.resolve_text(node.latex) if hasattr(compiler, "refs") else node.latex)
         inner = render_math_block(latex)
         return _frame_block(inner, max_width=max_width, tag=tag)
 

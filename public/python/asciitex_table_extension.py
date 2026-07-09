@@ -200,9 +200,11 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
         frame = _FRAMES.get(node.style, _FRAMES["single"])
         tl, _, tr, _, _, _, bl, _, br, horizontal, vertical = frame
         inner_width = max(1, width - 4)
-        inner = compiler.typesetter.text(compiler.refs.resolve_text(node.text), max_width=inner_width)
+        resolve = compiler.resolve_inline_text if hasattr(compiler, "resolve_inline_text") else compiler.refs.resolve_text
+        inner = compiler.typesetter.text(resolve(node.text), max_width=inner_width)
         boxno = meta.get("boxno")
-        heading = f"Box {boxno}: {node.title}" if boxno is not None and node.title else (f"Box {boxno}" if boxno is not None else node.title)
+        resolved_title = resolve(node.title) if node.title else node.title
+        heading = f"Box {boxno}: {resolved_title}" if boxno is not None and resolved_title else (f"Box {boxno}" if boxno is not None else resolved_title)
         title = f" {heading} " if heading else ""
         top_fill = max(0, width - 2 - len(title))
         top = tl + title + horizontal * top_fill + tr
@@ -213,7 +215,8 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
 
     def _render_table(self, node: TableNode, meta: Dict[str, Any], compiler: Any, max_width: int) -> Box:
         width = _render_width(node.width, meta, max_width)
-        rows = [[compiler.refs.resolve_text(cell) for cell in row] for row in node.rows]
+        resolve = compiler.resolve_inline_text if hasattr(compiler, "resolve_inline_text") else compiler.refs.resolve_text
+        rows = [[resolve(cell) for cell in row] for row in node.rows]
         if not rows:
             return Box.from_lines([], width=width)
         column_count = max(len(row) for row in rows)
@@ -252,7 +255,8 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
         lines: List[str] = []
         if node.caption:
             tableno = meta.get("tableno")
-            caption = f"Table {tableno}: {node.caption}" if tableno is not None else node.caption
+            caption_text = resolve(node.caption)
+            caption = f"Table {tableno}: {caption_text}" if tableno is not None else caption_text
             lines.append(caption[:width].center(width))
         lines.append(border(tl, tj, tr))
         for index, row in enumerate(rows):

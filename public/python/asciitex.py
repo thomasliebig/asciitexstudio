@@ -1872,6 +1872,10 @@ class TexLikeMonospaceCompiler:
         self.refs = ReferenceResolver()
         self.cite_numbers: "OrderedDict[str, int]" = OrderedDict()
 
+    def resolve_inline_text(self, text: str) -> str:
+        """Resolve cross-references and citations for visible prose-like text."""
+        return _replace_cites(self.refs.resolve_text(text), self.cite_numbers)
+
     def compile(
         self,
         src: str,
@@ -2098,7 +2102,7 @@ class TexLikeMonospaceCompiler:
                         continue
 
                     if isinstance(child, TextNode):
-                        txt = self.refs.resolve_text(child.text)
+                        txt = self.resolve_inline_text(child.text)
                         paras = re.split(r"\n\s*\n", txt.strip())
                         for p in paras:
                             p = p.strip()
@@ -2116,7 +2120,7 @@ class TexLikeMonospaceCompiler:
                             secno = self.counters.next_section(child.level) if child.numbered else None
                             if child.label and secno is not None:
                                 self.refs.register(child.label, secno)
-                        box = self.typesetter.section(child.level, self.refs.resolve_text(child.title), number=secno, max_width=col_w)
+                        box = self.typesetter.section(child.level, self.resolve_inline_text(child.title), number=secno, max_width=col_w)
                         box._role = "section"
                         stream_items.append(box)
                         continue

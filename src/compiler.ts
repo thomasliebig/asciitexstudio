@@ -12,7 +12,7 @@ type WorkerResponse =
   | { id: number; type: 'error'; error: string }
 
 export class AsciiTeXCompiler {
-  private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=21`)
+  private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=22`)
   private sequence = 0
   private pending = new Map<number, { resolve: (value: any) => void; reject: (reason: Error) => void }>()
 
@@ -45,7 +45,7 @@ export class AsciiTeXCompiler {
 
   private async projectKey(files: ProjectFile[], options: CompileOptions): Promise<string> {
     const encoder = new TextEncoder()
-    const parts: BlobPart[] = ['engine=21\n', `width=${options.canvasWidth}\n`, `main=${options.mainFile}\n`]
+    const parts: BlobPart[] = ['engine=22\n', `width=${options.canvasWidth}\n`, `main=${options.mainFile}\n`]
     for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
       parts.push(encoder.encode(`${file.path}\n${file.data.byteLength}\n`) as BlobPart, file.data as BlobPart)
     }

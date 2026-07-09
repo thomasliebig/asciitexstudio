@@ -457,7 +457,7 @@ class AsciiIncludeImageExtension(ParserExtension, NumberingExtension, RenderExte
             caption = f"Figure {fno}: {node.path}" if fno is not None else node.path
         elif fno is not None:
             caption = f"Figure {fno}: {caption}"
-        caption = compiler.refs.resolve_text(caption) if hasattr(compiler, "refs") else caption
+        caption = compiler.resolve_inline_text(caption) if hasattr(compiler, "resolve_inline_text") else (compiler.refs.resolve_text(caption) if hasattr(compiler, "refs") else caption)
         cap_line = (caption[:box_w]).ljust(box_w)
 
         # Frame

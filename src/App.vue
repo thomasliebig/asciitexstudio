@@ -472,9 +472,9 @@ function popoutCss(): string {
     .popout-actions { display: flex; align-items: center; gap: 10px; font-size: 11px; }
     button { height: 28px; padding: 0 10px; border: 1px solid #5b8e68; border-radius: 3px; color: #dff7e6; background: #1a3323; cursor: pointer; }
     button:hover { background: #24452f; border-color: #8be7a0; }
-    .popout-stage { overflow: auto; padding: 24px; }
-    .popout-paper { min-width: max-content; min-height: 100%; padding: 30px 32px; border: 1px solid #bad3bd; background: #eef5e9; box-shadow: 0 0 0 1px #ffffff55 inset, 0 18px 54px #0008; }
-    pre { margin: 0; color: #101d15; font-family: 'AsciiTeX Unicode Mono', monospace; font-size: 12px; line-height: 1.28; font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; white-space: pre; }
+    .popout-stage { overflow: auto; display: grid; justify-items: center; align-content: start; padding: 28px; }
+    .popout-paper { --document-ch: 96; width: calc(var(--document-ch) * 1ch + 64px); min-width: calc(var(--document-ch) * 1ch + 64px); min-height: calc(100vh - 98px); padding: 30px 32px; border: 1px solid #bad3bd; background: #eef5e9; box-shadow: 0 0 0 1px #ffffff55 inset, 0 18px 54px #0008; }
+    pre { width: calc(var(--document-ch) * 1ch); margin: 0; color: #101d15; font-family: 'AsciiTeX Unicode Mono', monospace; font-size: 12px; line-height: 1.28; font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; white-space: pre; }
   `
 }
 
@@ -485,9 +485,11 @@ function updatePopoutPreview(): void {
     return
   }
   const pre = previewWindow.document.getElementById('preview-output')
+  const paper = previewWindow.document.getElementById('preview-paper')
   const statusLabel = previewWindow.document.getElementById('preview-status')
   const widthLabel = previewWindow.document.getElementById('preview-width')
   if (pre) pre.textContent = preview.value
+  if (paper) paper.style.setProperty('--document-ch', String(canvasWidth.value))
   if (statusLabel) statusLabel.textContent = statusText.value
   if (widthLabel) widthLabel.textContent = `${canvasWidth.value} chars`
 }
@@ -518,7 +520,7 @@ function openPreviewPopout(): void {
             <div class="popout-actions"><span id="preview-width">${canvasWidth.value} chars</span><span id="preview-status">${escapeHtml(statusText.value)}</span><button onclick="window.close()">Dock in</button></div>
           </header>
           <section class="popout-stage">
-            <div class="popout-paper"><pre id="preview-output"></pre></div>
+            <div id="preview-paper" class="popout-paper" style="--document-ch: ${canvasWidth.value}"><pre id="preview-output"></pre></div>
           </section>
         </main>
       </body>

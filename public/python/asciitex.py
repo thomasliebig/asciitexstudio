@@ -310,23 +310,44 @@ def text_to_segments(
 
     wid = 0
     for tok in tokens:
-        if hyphenator is None or not _is_wordlike(tok):
-            parts = [tok]
-            hyph_pos: List[int] = []
+        part_specs: List[Tuple[str, bool]] = []
+        compound_parts = re.split(r"(?<=[A-Za-z0-9])-(?=[A-Za-z0-9])", tok)
+        if len(compound_parts) > 1:
+            compound_parts = [part + ("-" if idx < len(compound_parts) - 1 else "") for idx, part in enumerate(compound_parts)]
         else:
-            hyph_pos = hyphenator.hyphen_positions(tok)
-            if not hyph_pos:
-                parts = [tok]
-            else:
-                parts = []
-                start = 0
-                for p in hyph_pos:
-                    parts.append(tok[start:p])
-                    start = p
-                parts.append(tok[start:])
+            compound_parts = [tok]
 
-        for pi, part in enumerate(parts):
-            segments.append(Segment(part, wid, pi, pi == len(parts) - 1))
+        for ci, compound in enumerate(compound_parts):
+            if hyphenator is None or not _is_wordlike(compound):
+                parts = [compound]
+            else:
+                trailing_hyphen = compound.endswith("-")
+                stem = compound[:-1] if trailing_hyphen else compound
+                hyph_pos = hyphenator.hyphen_positions(stem)
+                if not hyph_pos:
+                    parts = [compound]
+                else:
+                    parts = []
+                    start = 0
+                    for p in hyph_pos:
+                        parts.append(stem[start:p])
+                        start = p
+                    parts.append(stem[start:] + ("-" if trailing_hyphen else ""))
+
+            for pi, part in enumerate(parts):
+                if not part:
+                    continue
+                # Breaks after an existing compound hyphen (``data-driven``)
+                # already show the hyphen in the previous segment, so they must
+                # not insert a second hyphen. Pattern-based word hyphenation
+                # still inserts one at line end.
+                inserts_before = bool(pi > 0)
+                if ci > 0 and pi == 0:
+                    inserts_before = False
+                part_specs.append((part, inserts_before))
+
+        for pi, (part, inserts_before) in enumerate(part_specs):
+            segments.append(Segment(part, wid, pi, pi == len(part_specs) - 1))
             if len(segments) == 1:
                 continue
 
@@ -335,7 +356,7 @@ def text_to_segments(
             if prev.word_id != cur.word_id:
                 boundaries.append(Boundary(True, True, 0, False))              # between words
             else:
-                boundaries.append(Boundary(False, True, hyphen_penalty, True))  # inside word
+                boundaries.append(Boundary(False, True, hyphen_penalty, inserts_before))  # inside word
 
         wid += 1
 

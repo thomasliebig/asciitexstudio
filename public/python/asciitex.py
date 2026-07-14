@@ -2182,6 +2182,29 @@ class TexLikeMonospaceCompiler:
                 out.append(fragment)
             return out
 
+        def bibliography_entry_box(entry: str, max_width: int) -> Box:
+            """Render ``[n] Author...`` with a stable single space after the label.
+
+            Bibliography entries should not be justified across the label boundary:
+            otherwise Knuth-Plass may insert a different number of spaces between
+            ``[2]`` and the first author depending on line badness.
+            """
+            match = re.match(r"^(\[[^\]]+\])\s*(.*)$", entry.strip())
+            if not match:
+                box = self.typesetter.text(entry, max_width=max_width)
+                box._role = "text"
+                return box
+            label, body_text = match.group(1), match.group(2)
+            indent = len(label) + 1
+            body_width = max(8, max_width - indent)
+            body = self.typesetter.text(body_text, max_width=body_width)
+            body_lines = body.lines or [""]
+            lines = [(label + " " + body_lines[0][:body_width]).ljust(max_width)]
+            lines.extend((" " * indent + line[:body_width]).ljust(max_width) for line in body_lines[1:])
+            box = Box.from_lines(lines, width=max_width)
+            box._role = "text"
+            return box
+
         render_items: List[Union[Box, FloatItem]] = []
 
         for n, meta in resolved_nodes:
@@ -2378,9 +2401,7 @@ class TexLikeMonospaceCompiler:
                         box._role = "text"
                         stream_items.append(box)
                         for e in entries:
-                            box = self.typesetter.text(e, max_width=col_w)
-                            box._role = "text"
-                            stream_items.append(box)
+                            stream_items.append(bibliography_entry_box(e, col_w))
                         continue
 
                     if isinstance(child, BibEntryNode):
@@ -2409,9 +2430,7 @@ class TexLikeMonospaceCompiler:
                 box._role = "section"
                 bib_boxes.append(box)
                 for e in entries:
-                    box = self.typesetter.text(e, max_width=inner_width)
-                    box._role = "text"
-                    bib_boxes.append(box)
+                    bib_boxes.append(bibliography_entry_box(e, inner_width))
                 render_items.extend(bib_boxes)
 
             elif isinstance(n, ManualBibliographyNode):
@@ -2422,9 +2441,7 @@ class TexLikeMonospaceCompiler:
                 box._role = "section"
                 bib_boxes.append(box)
                 for entry in entries:
-                    box = self.typesetter.text(entry, max_width=inner_width)
-                    box._role = "text"
-                    bib_boxes.append(box)
+                    bib_boxes.append(bibliography_entry_box(entry, inner_width))
                 render_items.extend(bib_boxes)
 
             elif isinstance(n, BibEntryNode):

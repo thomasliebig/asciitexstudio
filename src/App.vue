@@ -130,8 +130,7 @@ async function compileProject(): Promise<void> {
   }
 }
 
-function outputLineAt(event: MouseEvent): number {
-  const pre = previewPreRef.value
+function outputLineAtPre(event: MouseEvent, pre: HTMLElement | null | undefined): number {
   if (!pre) return 0
   const style = window.getComputedStyle(pre)
   const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.2
@@ -139,14 +138,22 @@ function outputLineAt(event: MouseEvent): number {
     Math.floor((event.clientY - pre.getBoundingClientRect().top) / lineHeight)))
 }
 
-async function revealSource(event: MouseEvent): Promise<void> {
-  const location = syncMap.value.outputToSource[outputLineAt(event)]
+function outputLineAt(event: MouseEvent): number {
+  return outputLineAtPre(event, previewPreRef.value)
+}
+
+async function revealSourceLine(outputLine: number): Promise<void> {
+  const location = syncMap.value.outputToSource[outputLine]
   if (!location) return
   if (activePath.value !== location.path) {
     await selectFile(location.path)
     await nextTick()
   }
   monacoPaneRef.value?.goToLine(location.line + 1)
+}
+
+async function revealSource(event: MouseEvent): Promise<void> {
+  await revealSourceLine(outputLineAt(event))
 }
 
 function revealOutput(sourceLine: number): void {
@@ -520,6 +527,11 @@ function openPreviewPopout(): void {
   previewWindow.addEventListener('beforeunload', () => {
     previewWindow = null
     previewPoppedOut.value = false
+  })
+  const popoutPre = previewWindow.document.getElementById('preview-output')
+  popoutPre?.addEventListener('dblclick', event => {
+    void revealSourceLine(outputLineAtPre(event as MouseEvent, popoutPre))
+    window.focus()
   })
   previewPoppedOut.value = true
   updatePopoutPreview()

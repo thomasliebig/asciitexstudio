@@ -700,7 +700,13 @@ onBeforeUnmount(() => {
 
       <section class="preview-panel" data-tour="preview">
         <div class="pane-bar preview-bar">
-          <div><span class="eyebrow">OUTPUT</span><strong>Unicode preview</strong></div>
+          <div class="preview-title">
+            <span class="eyebrow">OUTPUT</span>
+            <strong>Unicode preview</strong>
+            <button class="preview-popout-primary" type="button" :title="previewPoppedOut ? 'Dock preview back into the studio' : 'Pop out preview into a separate window'" @click="togglePreviewPopout">
+              {{ previewPoppedOut ? '↙ Dock in' : '↗ Pop out' }}
+            </button>
+          </div>
           <div class="preview-controls">
             <label class="width-control" title="AsciiTeX canvas width in characters">
               <span>Document width</span>
@@ -710,9 +716,6 @@ onBeforeUnmount(() => {
             </label>
             <button class="copy-button" type="button" title="Copy Unicode output to clipboard" @click="copyOutput">
               {{ copyState === 'copied' ? '✓ Copied' : copyState === 'error' ? 'Copy failed' : '⧉ Copy output' }}
-            </button>
-            <button class="copy-button popout-button" type="button" :title="previewPoppedOut ? 'Dock preview back into the studio' : 'Pop out preview into a separate window'" @click="togglePreviewPopout">
-              {{ previewPoppedOut ? '↙ Dock in' : '↗ Pop out' }}
             </button>
             <span class="status-dot" :class="status"></span>
             <span>{{ statusText }}</span>

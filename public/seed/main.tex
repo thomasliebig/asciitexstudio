@@ -175,6 +175,20 @@ Rounded corners work well for friendly hints and examples.
 Double borders provide stronger visual emphasis for important results.
 \end{box}
 
+Boxes may contain other AsciiTeX environments. Use place=h for here, place=t for
+top, place=b for bottom, and place=inline to disable floating.
+\begin{box}[width=\textwidth,style=rounded,place=h,title="Nested syntax"]
+Manual line breaks work in prose: first line\newline second line.
+\begin{itemize}
+\item Lists work inside boxes.
+\item Equations and bib entries are rendered as nested blocks.
+\end{itemize}
+\begin{equation*}
+  E = mc^2
+\end{equation*}
+\bibentry{knuth1981}
+\end{box}
+
 \section{Horizontal rules}
 Single rule:
 \hr[style=single,width=\textwidth]
@@ -206,6 +220,13 @@ Dotted rule:
   "lines": [{"x": [0, 1, 2, 3, 4], "y": [0.2, 1.4, 2.7, 3.4, 4.6], "name": "pipeline", "ch": "•"}]
 }
 \enddiagram
+
+\begin{longasciitable}[width=\columnwidth,place=b,header=true,borders=rows,caption="Bottom table float"]
+Option & Effect
+place=t & Float to the next column top.
+place=b & Float to the current column bottom.
+place=h & Keep near the source position.
+\end{longasciitable}
 
 \subsection{Why text columns?}
 Two columns make compact technical notes easier to scan. Content stays in reading

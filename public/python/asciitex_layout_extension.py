@@ -156,6 +156,31 @@ def _center(text: str, width: int) -> str:
     return (" " * left) + text + (" " * right)
 
 
+def _wrap_ragged(text: str, width: int) -> List[str]:
+    words = text.split()
+    if not words:
+        return [""]
+    lines: List[str] = []
+    current = ""
+    for word in words:
+        while len(word) > width:
+            if current:
+                lines.append(current)
+                current = ""
+            lines.append(word[:width])
+            word = word[width:]
+        candidate = word if not current else f"{current} {word}"
+        if len(candidate) <= width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
 def _pad_lines(lines: List[str], width: int) -> List[str]:
     return [ln[:width].ljust(width) for ln in lines]
 
@@ -422,11 +447,13 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
         if isinstance(node, TitleNode):
             text = compiler.refs.resolve_text(node.text)
             text = self._replace_cites_if_available(compiler, text)
-            lines = [ln.rstrip() for ln in text.splitlines() if ln.strip()] or [""]
+            lines: List[str] = []
+            for raw in [ln.strip() for ln in text.splitlines() if ln.strip()] or [""]:
+                lines.extend(_wrap_ragged(raw, max_width))
             out: List[str] = []
             for ln in lines:
                 out.append(_center(ln, max_width))
-            underline = "═" * min(max_width, max((len(ln.strip()) for ln in lines), default=0))
+            underline = "\u2550" * min(max_width, max((len(ln.strip()) for ln in lines), default=0))
             if underline:
                 out.append(_center(underline, max_width))
             return Box.from_lines(out, width=max_width)

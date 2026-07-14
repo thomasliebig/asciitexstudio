@@ -6,7 +6,32 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from asciitex import Box, DimContext, DimExpr, Node, ParserExtension, RenderExtension, eval_dim
+from asciitex import (
+    BibEntryNode,
+    BibNode,
+    Box,
+    CodeNode,
+    ColumnBreakItem,
+    ColumnBreakNode,
+    DiagramNode,
+    DimContext,
+    DimExpr,
+    EquationNode,
+    FloatBarrierItem,
+    FloatBarrierNode,
+    FloatItem,
+    ImageNode,
+    LayoutCursor,
+    LayoutEngine,
+    Node,
+    ParserExtension,
+    RenderExtension,
+    SectionNode,
+    TextNode,
+    TwoColumnNode,
+    Canvas,
+    eval_dim,
+)
 
 
 @dataclass
@@ -22,16 +47,19 @@ class TableNode(Node):
     label: Optional[str] = None
     numbered: bool = True
     long: bool = False
+    placement: str = "h"
 
 
 @dataclass
 class DecoratedBoxNode(Node):
     text: str
+    children: Optional[List[Node]] = None
     width: DimExpr = r"\textwidth"
     style: str = "single"
     title: Optional[str] = None
     label: Optional[str] = None
     numbered: bool = True
+    placement: str = "h"
 
 
 @dataclass
@@ -265,6 +293,7 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
                 caption=_strip_quotes(opts.get("caption")),
                 numbered=_truthy(opts.get("numbered"), True),
                 long=(kind == "longascii"),
+                placement=opts.get("place", opts.get("placement", "h")).lower(),
             )
             if pending_label:
                 node.label, pending_label = pending_label, None
@@ -282,10 +311,12 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
                 raise ValueError(f"Unterminated box beginning at line {i + 1}")
             node = DecoratedBoxNode(
                 text="\n".join(body).strip(),
+                children=parser.parse("\n".join(body).strip()) if body else [],
                 width=opts.get("width", r"\textwidth"),
                 style=opts.get("style", "single").lower(),
                 title=_strip_quotes(opts.get("title")),
                 numbered=_truthy(opts.get("numbered"), True),
+                placement=opts.get("place", opts.get("placement", "h")).lower(),
             )
             if pending_label:
                 node.label, pending_label = pending_label, None
@@ -335,21 +366,29 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
         max_width: int,
     ) -> Optional[Union[Box, Any]]:
         if isinstance(node, TableNode):
-            return self._render_table(node, meta, compiler, max_width)
+            box = self._render_table(node, meta, compiler, max_width)
+            return self._as_float_if_requested(box, node.placement, {"kind": "table", "number": meta.get("tableno")})
         if isinstance(node, DecoratedBoxNode):
-            return self._render_box(node, meta, compiler, max_width)
+            box = self._render_box(node, meta, compiler, max_width)
+            return self._as_float_if_requested(box, node.placement, {"kind": "box", "number": meta.get("boxno")})
         if isinstance(node, StyledRuleNode):
             width = _render_width(node.width, meta, max_width)
             char = _RULE_CHARS.get(node.style, _RULE_CHARS["single"])
             return Box.from_lines([char * width], width=width)
         return None
 
+    def _as_float_if_requested(self, box: Box, placement: str, meta: Dict[str, Any]) -> Union[Box, FloatItem]:
+        place = (placement or "h").strip().lower()
+        if place in ("inline", "none", "n", "no"):
+            return box
+        return FloatItem(box=box, placement=place, meta=meta)
+
     def _render_box(self, node: DecoratedBoxNode, meta: Dict[str, Any], compiler: Any, max_width: int) -> Box:
         width = _render_width(node.width, meta, max_width)
         frame = _FRAME_STYLES.get(node.style, _FRAME_STYLES["single"])
         inner_width = max(1, width - 4)
         resolve = compiler.resolve_inline_text if hasattr(compiler, "resolve_inline_text") else compiler.refs.resolve_text
-        inner = compiler.typesetter.text(resolve(node.text), max_width=inner_width)
+        inner = self._render_box_children(node, compiler=compiler, max_width=inner_width)
         boxno = meta.get("boxno")
         resolved_title = resolve(node.title) if node.title else node.title
         heading = f"Box {boxno}: {resolved_title}" if boxno is not None and resolved_title else (f"Box {boxno}" if boxno is not None else resolved_title)
@@ -360,6 +399,114 @@ class AsciiTableExtension(ParserExtension, RenderExtension):
         lines.extend(frame.v + " " + line[:inner_width].ljust(inner_width) + " " + frame.v for line in inner.lines)
         lines.append(frame.bl + frame.h * (width - 2) + frame.br)
         return Box.from_lines(lines, width=width)
+
+    def _render_box_children(self, node: DecoratedBoxNode, *, compiler: Any, max_width: int) -> Box:
+        children = node.children if node.children is not None else None
+        if not children:
+            resolve = compiler.resolve_inline_text if hasattr(compiler, "resolve_inline_text") else compiler.refs.resolve_text
+            return compiler.typesetter.text(resolve(node.text), max_width=max_width)
+        lines: List[str] = []
+        for child in children:
+            box = self._render_child_node(child, compiler=compiler, max_width=max_width)
+            if box is None:
+                continue
+            if lines and box.lines:
+                lines.append("".ljust(max_width))
+            lines.extend(line[:max_width].ljust(max_width) for line in box.lines)
+        return Box.from_lines(lines or ["".ljust(max_width)], width=max_width)
+
+    def _render_child_node(self, child: Node, *, compiler: Any, max_width: int) -> Optional[Box]:
+        meta = dict(getattr(child, "_meta", {}))
+        meta["_column_width"] = max_width
+        meta["_text_width"] = max_width
+
+        for ext in compiler.registry.render:
+            if ext is self:
+                continue
+            rendered = ext.try_render(node=child, meta=meta, compiler=compiler, max_width=max_width)
+            if rendered is not None:
+                return rendered.box if isinstance(rendered, FloatItem) else rendered
+
+        if isinstance(child, TextNode):
+            resolve = compiler.resolve_inline_text if hasattr(compiler, "resolve_inline_text") else compiler.refs.resolve_text
+            return compiler.typesetter.text(resolve(child.text), max_width=max_width)
+
+        if isinstance(child, SectionNode):
+            resolve = compiler.resolve_inline_text if hasattr(compiler, "resolve_inline_text") else compiler.refs.resolve_text
+            return compiler.typesetter.section(child.level, resolve(child.title), number=meta.get("secno"), max_width=max_width)
+
+        if isinstance(child, EquationNode):
+            eqno = meta.get("eqno")
+            if eqno is None and child.numbered:
+                eqno = compiler.counters.next_equation()
+                if child.label:
+                    compiler.refs.register(child.label, str(eqno))
+            return compiler.typesetter.equation(child.latex, number=eqno, max_width=max_width)
+
+        if isinstance(child, CodeNode):
+            return compiler.typesetter.codeblock(child.code, max_width=max_width)
+
+        if isinstance(child, ImageNode):
+            ctx = DimContext(max_width, 10**9, max_width, max_width, 10**9)
+            fno = meta.get("figno")
+            if fno is None:
+                fno = compiler.counters.next_figure() if child.label or getattr(child, "numbered", True) else None
+                if child.label and fno is not None:
+                    compiler.refs.register(child.label, str(fno))
+            w = eval_dim(child.width, ctx, default=min(40, max_width))
+            h = eval_dim(child.height, ctx, default=10)
+            return compiler.typesetter.image(child.path, width=min(w, max_width), height=h, number=fno)
+
+        if isinstance(child, DiagramNode):
+            ctx = DimContext(max_width, 10**9, max_width, max_width, 10**9)
+            dno = meta.get("diano")
+            if dno is None:
+                dno = compiler.counters.next_diagram()
+                if child.label:
+                    compiler.refs.register(child.label, str(dno))
+            w = eval_dim(child.width, ctx, default=min(40, max_width))
+            h = eval_dim(child.height, ctx, default=8)
+            return compiler.typesetter.diagram(child.spec, width=min(w, max_width), height=h, number=dno)
+
+        if isinstance(child, TableNode):
+            return self._render_table(child, meta, compiler, max_width)
+
+        if isinstance(child, DecoratedBoxNode):
+            return self._render_box(child, meta, compiler, max_width)
+
+        if isinstance(child, BibEntryNode) and hasattr(compiler, "format_bibentry_node"):
+            return compiler.typesetter.text(compiler.format_bibentry_node(child), max_width=max_width)
+
+        if isinstance(child, TwoColumnNode):
+            return self._render_inner_twocolumn(child, compiler=compiler, max_width=max_width)
+
+        if isinstance(child, BibNode):
+            return None
+
+        return None
+
+    def _render_inner_twocolumn(self, node: TwoColumnNode, *, compiler: Any, max_width: int) -> Box:
+        gutter = max(0, min(eval_dim(node.gutter, DimContext(max_width, 10**9, max_width, max_width, 10**9), default=2), max_width - 10))
+        tw = max(10, min(eval_dim(node.textwidth, DimContext(max_width, 10**9, max_width, max_width, 10**9), default=max_width), max_width))
+        col_w = max(5, (tw - gutter) // 2)
+        canvas = Canvas(max_width, 8)
+        engine = LayoutEngine(canvas)
+        cursor = LayoutCursor(x=0, y=0, region_width=max_width, region_height=10**9)
+        stream: List[Any] = []
+        for child in node.children:
+            if isinstance(child, ColumnBreakNode):
+                stream.append(ColumnBreakItem())
+                continue
+            if isinstance(child, FloatBarrierNode):
+                stream.append(FloatBarrierItem())
+                continue
+            box = self._render_child_node(child, compiler=compiler, max_width=col_w)
+            if box is not None:
+                stream.append(box)
+        engine.layout_two_columns(stream, cursor, col_width=col_w, gutter=gutter, balance=node.balance, auto_height=True)
+        last_y = max((pb.y + pb.box.height for pb in engine.placed), default=0)
+        canvas.ensure_height(last_y)
+        return Box.from_lines(canvas.to_string().splitlines()[:last_y], width=max_width)
 
     def _render_table(self, node: TableNode, meta: Dict[str, Any], compiler: Any, max_width: int) -> Box:
         width = _render_width(node.width, meta, max_width)

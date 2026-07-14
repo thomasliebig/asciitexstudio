@@ -614,6 +614,9 @@ class TypesetterAdapter:
         - Splits into paragraphs on blank lines.
         - Uses constant-width shape: [max_width] * N, where N is estimated.
         """
+        forced_break = "\uE001"
+        content = re.sub(r"\\newline\b", f" {forced_break} ", content)
+        content = re.sub(r"(?<!\\)\\\\(?![a-zA-Z])", f" {forced_break} ", content)
         # TeX-style dash conventions: em dash first so its three hyphens are not
         # partially consumed by the en-dash replacement.
         content = content.replace("---", "—").replace("--", "–")
@@ -645,18 +648,24 @@ class TypesetterAdapter:
                     out_lines.append("")
                 continue
 
-            # Estimate a safe upper bound of needed lines so KP can search.
-            # (KP is O(n^2 * L). Keep L reasonable but big enough.)
-            approx = max(1, len(p) // max(1, max_width - 5))
-            max_lines = min(400, approx + 50)  # cap to avoid blow-ups on huge paragraphs
-            line_widths = [max_width] * max_lines
-            lines = layout_paragraph_into_shape(p, line_widths, self.kp, self.hyphenator)
+            for part in p.split(forced_break):
+                part = part.strip()
+                if not part:
+                    out_lines.append("")
+                    continue
 
-            # trim any accidental empty tail
-            while lines and lines[-1] == "":
-                lines.pop()
+                # Estimate a safe upper bound of needed lines so KP can search.
+                # (KP is O(n^2 * L). Keep L reasonable but big enough.)
+                approx = max(1, len(part) // max(1, max_width - 5))
+                max_lines = min(400, approx + 50)  # cap to avoid blow-ups on huge paragraphs
+                line_widths = [max_width] * max_lines
+                lines = layout_paragraph_into_shape(part, line_widths, self.kp, self.hyphenator)
 
-            out_lines.extend(lines)
+                # trim any accidental empty tail
+                while lines and lines[-1] == "":
+                    lines.pop()
+
+                out_lines.extend(lines)
             out_lines.append("")
 
         if out_lines and out_lines[-1] == "":
@@ -1329,7 +1338,7 @@ class LayoutEngine:
     @classmethod
     def _gap_after_box(cls, box: Box, default_gap: int) -> int:
         role = cls._box_role(box)
-        if role == "section":
+        if role in ("section", "flow-fragment"):
             return 0
         return default_gap
 
@@ -1653,6 +1662,13 @@ class LayoutEngine:
                     nxt = next_text_box(idx + 1)
                     keep_lines = 2 if nxt is None else min(2, nxt.height)
                     need = item.height + gap_after(item) + keep_lines
+                    if balance and tag == "L" and not switched:
+                        balance_remaining = target_h - (eff_y(lc, resB_L) - y0)
+                        if balance_remaining < need and (auto_height or need <= remaining_for(rc, resB_R)):
+                            switched = True
+                            c, fq, tag = rc, fqR, "R"
+                            resB = resB_R
+                            place_top_floats(c, fq, resB, require_text_lines=2)
                     if (not auto_height) and remaining_for(c, resB) < need:
                         if tag == "L":
                             switched = True
@@ -2137,6 +2153,35 @@ class TexLikeMonospaceCompiler:
 
         base_ctx = ctx_for(inner_width)
 
+        def split_flowable_box(box: Box, *, chunk_lines: int = 3, min_tail: int = 2) -> List[Box]:
+            """Split prose boxes into column-friendly fragments.
+
+            Fragments keep zero gap between each other, while the final fragment
+            keeps the original role/gap. This gives the column balancer legal
+            breakpoints inside long paragraphs without creating visible blank
+            lines in the paragraph itself.
+            """
+            if box.height <= chunk_lines + min_tail:
+                return [box]
+            chunks: List[List[str]] = []
+            idx = 0
+            while idx < box.height:
+                remaining = box.height - idx
+                if chunks and remaining <= min_tail:
+                    chunks[-1].extend(box.lines[idx:])
+                    break
+                take = min(chunk_lines, remaining)
+                if remaining - take == 1:
+                    take += 1
+                chunks.append(box.lines[idx:idx + take])
+                idx += take
+            out: List[Box] = []
+            for chunk_idx, lines in enumerate(chunks):
+                fragment = Box.from_lines(lines, width=box.width)
+                fragment._role = "flow-fragment" if chunk_idx < len(chunks) - 1 else getattr(box, "_role", "text")
+                out.append(fragment)
+            return out
+
         render_items: List[Union[Box, FloatItem]] = []
 
         for n, meta in resolved_nodes:
@@ -2229,7 +2274,7 @@ class TexLikeMonospaceCompiler:
                                 continue
                             box = self.typesetter.text(p, max_width=col_w)
                             box._role = "text"
-                            stream_items.append(box)
+                            stream_items.extend(split_flowable_box(box))
                         continue
 
                     if isinstance(child, SectionNode):
@@ -2336,9 +2381,6 @@ class TexLikeMonospaceCompiler:
                             box = self.typesetter.text(e, max_width=col_w)
                             box._role = "text"
                             stream_items.append(box)
-                            stream_items.append(Box.from_lines([""], width=col_w))
-                        if stream_items and isinstance(stream_items[-1], Box) and stream_items[-1].lines == [""]:
-                            stream_items.pop()
                         continue
 
                     if isinstance(child, BibEntryNode):
@@ -2370,9 +2412,6 @@ class TexLikeMonospaceCompiler:
                     box = self.typesetter.text(e, max_width=inner_width)
                     box._role = "text"
                     bib_boxes.append(box)
-                    bib_boxes.append(Box.from_lines([""], width=inner_width))
-                if bib_boxes and bib_boxes[-1].lines == [""]:
-                    bib_boxes.pop()
                 render_items.extend(bib_boxes)
 
             elif isinstance(n, ManualBibliographyNode):
@@ -2385,9 +2424,7 @@ class TexLikeMonospaceCompiler:
                 for entry in entries:
                     box = self.typesetter.text(entry, max_width=inner_width)
                     box._role = "text"
-                    bib_boxes.extend([box, Box.from_lines([""], width=inner_width)])
-                if bib_boxes and bib_boxes[-1].lines == [""]:
-                    bib_boxes.pop()
+                    bib_boxes.append(box)
                 render_items.extend(bib_boxes)
 
             elif isinstance(n, BibEntryNode):

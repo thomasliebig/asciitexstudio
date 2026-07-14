@@ -28,6 +28,8 @@ const copyState = ref<'idle' | 'copied' | 'error'>('idle')
 const dirty = ref(false)
 const installAvailable = ref(false)
 const installedApp = ref(false)
+const fileDragActive = ref(false)
+const previewPoppedOut = ref(false)
 const tourStep = ref(-1)
 const tourStyle = ref<Record<string, string>>({})
 const tourPlacement = ref<'right' | 'left' | 'bottom'>('right')
@@ -36,7 +38,9 @@ const compiler = new AsciiTeXCompiler()
 let installPrompt: BeforeInstallPromptEvent | undefined
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let compileTimer: ReturnType<typeof setTimeout> | undefined
+let dragDepth = 0
 let buildGeneration = 0
+let previewWindow: Window | null = null
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>
@@ -170,12 +174,52 @@ async function createFile(): Promise<void> {
 
 async function uploadFiles(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
-  for (const file of Array.from(input.files ?? [])) {
-    await writeBinary(`/${file.name}`, new Uint8Array(await file.arrayBuffer()))
-  }
+  await writeDroppedFiles(Array.from(input.files ?? []))
   input.value = ''
+}
+
+async function writeDroppedFiles(droppedFiles: File[]): Promise<void> {
+  if (!droppedFiles.length) return
+  await flushSave()
+  for (const file of droppedFiles) {
+    const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+    const path = `/${relative.replace(/^\/+/, '').replaceAll('\\', '/')}`
+    await writeBinary(path, new Uint8Array(await file.arrayBuffer()))
+  }
   await refreshFiles()
+  const firstText = droppedFiles
+    .map(file => `/${(((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(/^\/+/, '').replaceAll('\\', '/'))}`)
+    .find(path => isTextPath(path))
+  if (firstText) await selectFile(firstText)
   queueCompile()
+}
+
+function onFileDragEnter(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  event.preventDefault()
+  dragDepth += 1
+  fileDragActive.value = true
+}
+
+function onFileDragOver(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+  fileDragActive.value = true
+}
+
+function onFileDragLeave(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) fileDragActive.value = false
+}
+
+async function onFileDrop(event: DragEvent): Promise<void> {
+  if (!event.dataTransfer?.files.length) return
+  event.preventDefault()
+  dragDepth = 0
+  fileDragActive.value = false
+  await writeDroppedFiles(Array.from(event.dataTransfer.files))
 }
 
 async function renamePath(path = activePath.value): Promise<void> {
@@ -401,7 +445,100 @@ async function copyOutput(): Promise<void> {
   window.setTimeout(() => { copyState.value = 'idle' }, 1800)
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] ?? ch))
+}
+
+function popoutCss(): string {
+  const base = import.meta.env.BASE_URL
+  const fontUrl = `${window.location.origin}${base}fonts/NotoSansMono-Variable.ttf`
+  return `
+    @font-face { font-family: 'AsciiTeX Unicode Mono'; src: url('${fontUrl}') format('truetype'); font-display: block; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0b130e; color: #d8f2df; font-family: 'DM Sans', system-ui, sans-serif; }
+    .popout-shell { min-height: 100vh; display: grid; grid-template-rows: 42px 1fr; background:
+      radial-gradient(circle at 20% 0%, #1d3b28 0, transparent 34%),
+      linear-gradient(135deg, #0c160f 0%, #13231a 58%, #0a110d 100%); }
+    .popout-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 13px; border-bottom: 1px solid #31523d; background: #132019e8; color: #9fcfab; }
+    .popout-title { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+    .popout-title i { width: 8px; height: 8px; border-radius: 50%; background: #7ee097; box-shadow: 0 0 12px #7ee09799; }
+    .popout-actions { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+    button { height: 28px; padding: 0 10px; border: 1px solid #5b8e68; border-radius: 3px; color: #dff7e6; background: #1a3323; cursor: pointer; }
+    button:hover { background: #24452f; border-color: #8be7a0; }
+    .popout-stage { overflow: auto; padding: 24px; }
+    .popout-paper { min-width: max-content; min-height: 100%; padding: 30px 32px; border: 1px solid #bad3bd; background: #eef5e9; box-shadow: 0 0 0 1px #ffffff55 inset, 0 18px 54px #0008; }
+    pre { margin: 0; color: #101d15; font-family: 'AsciiTeX Unicode Mono', monospace; font-size: 12px; line-height: 1.28; font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; white-space: pre; }
+  `
+}
+
+function updatePopoutPreview(): void {
+  if (!previewWindow || previewWindow.closed) {
+    previewWindow = null
+    previewPoppedOut.value = false
+    return
+  }
+  const pre = previewWindow.document.getElementById('preview-output')
+  const statusLabel = previewWindow.document.getElementById('preview-status')
+  const widthLabel = previewWindow.document.getElementById('preview-width')
+  if (pre) pre.textContent = preview.value
+  if (statusLabel) statusLabel.textContent = statusText.value
+  if (widthLabel) widthLabel.textContent = `${canvasWidth.value} chars`
+}
+
+function openPreviewPopout(): void {
+  if (previewWindow && !previewWindow.closed) {
+    previewWindow.focus()
+    return
+  }
+  previewWindow = window.open('', 'asciitex-preview', 'popup=yes,width=980,height=760')
+  if (!previewWindow) {
+    window.alert('The browser blocked the preview pop-out. Please allow pop-ups for this site.')
+    return
+  }
+  previewWindow.document.open()
+  previewWindow.document.write(`<!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>AsciiTeX Live Preview</title>
+        <style>${popoutCss()}</style>
+      </head>
+      <body>
+        <main class="popout-shell">
+          <header class="popout-bar">
+            <div class="popout-title"><i></i><strong>AsciiTeX live preview</strong></div>
+            <div class="popout-actions"><span id="preview-width">${canvasWidth.value} chars</span><span id="preview-status">${escapeHtml(statusText.value)}</span><button onclick="window.close()">Dock in</button></div>
+          </header>
+          <section class="popout-stage">
+            <div class="popout-paper"><pre id="preview-output"></pre></div>
+          </section>
+        </main>
+      </body>
+    </html>`)
+  previewWindow.document.close()
+  previewWindow.addEventListener('beforeunload', () => {
+    previewWindow = null
+    previewPoppedOut.value = false
+  })
+  previewPoppedOut.value = true
+  updatePopoutPreview()
+  previewWindow.focus()
+}
+
+function dockPreview(): void {
+  if (previewWindow && !previewWindow.closed) previewWindow.close()
+  previewWindow = null
+  previewPoppedOut.value = false
+}
+
+function togglePreviewPopout(): void {
+  if (previewPoppedOut.value) dockPreview()
+  else openPreviewPopout()
+}
+
 watch(canvasWidth, () => { if (autoCompile.value) queueCompile() })
+watch([preview, statusText, canvasWidth], updatePopoutPreview)
 
 onMounted(async () => {
   installedApp.value = window.matchMedia('(display-mode: standalone)').matches
@@ -435,6 +572,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (saveTimer) clearTimeout(saveTimer)
   if (compileTimer) clearTimeout(compileTimer)
+  dockPreview()
   window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
   window.removeEventListener('appinstalled', markInstalled)
   window.removeEventListener('resize', positionTour)
@@ -483,7 +621,10 @@ onBeforeUnmount(() => {
         class="sidebar-rail-toggle" :aria-label="sidebarOpen ? 'Collapse files' : 'Expand files'"
         :title="sidebarOpen ? 'Collapse files' : 'Expand files'" @click="toggleSidebar"
       >{{ sidebarOpen ? '‹' : '›' }}</button>
-      <aside class="file-panel" data-tour="files">
+      <aside
+        class="file-panel" :class="{ 'drag-active': fileDragActive }" data-tour="files"
+        @dragenter="onFileDragEnter" @dragover="onFileDragOver" @dragleave="onFileDragLeave" @drop="onFileDrop"
+      >
         <div class="panel-heading">
           <div><span class="eyebrow">PROJECT</span><h2>Files</h2></div>
           <div class="file-actions">
@@ -504,6 +645,11 @@ onBeforeUnmount(() => {
             <span class="file-name">{{ shortName(file.path) }}</span>
             <span v-if="file.path === '/main.tex'" class="main-tag">MAIN</span>
             <button class="file-more" :aria-label="`Actions for ${shortName(file.path)}`" title="File actions" @click.stop="openFileMenu($event, file.path)">•••</button>
+          </div>
+          <div class="drop-hint" aria-hidden="true">
+            <span>⇣</span>
+            <strong>Drop files here</strong>
+            <small>.tex, .bib, images and project assets</small>
           </div>
         </div>
         <div class="file-footer">
@@ -564,6 +710,9 @@ onBeforeUnmount(() => {
             </label>
             <button class="copy-button" type="button" title="Copy Unicode output to clipboard" @click="copyOutput">
               {{ copyState === 'copied' ? '✓ Copied' : copyState === 'error' ? 'Copy failed' : '⧉ Copy output' }}
+            </button>
+            <button class="copy-button popout-button" type="button" :title="previewPoppedOut ? 'Dock preview back into the studio' : 'Pop out preview into a separate window'" @click="togglePreviewPopout">
+              {{ previewPoppedOut ? '↙ Dock in' : '↗ Pop out' }}
             </button>
             <span class="status-dot" :class="status"></span>
             <span>{{ statusText }}</span>

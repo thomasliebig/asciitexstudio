@@ -21,7 +21,7 @@ const TEXT_EXTENSIONS = new Set([
 ])
 
 const SEED_MANIFEST_URL = 'seed/manifest.json'
-const RENDER_CACHE_PATH = '/.asciitex-render-cache-v18.json'
+const RENDER_CACHE_PATH = '/.asciitex-render-cache-v19.json'
 
 let fs: any
 

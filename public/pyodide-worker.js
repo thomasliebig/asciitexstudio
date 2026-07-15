@@ -1,6 +1,6 @@
 const WORKER_BASE = new URL('./', self.location.href)
 const PYODIDE_PATH = new URL('./pyodide/', WORKER_BASE).href
-const ENGINE_VERSION = '33'
+const ENGINE_VERSION = '34'
 const ENGINE_FILES = [
   'asciitex.py',
   'asciitex_bib_extension.py',
@@ -114,7 +114,11 @@ def dependency_digest(value):
 
 def pack_rendered(value):
     if isinstance(value, Box):
-        return {"kind": "box", "lines": value.lines, "width": value.width, "role": getattr(value, "_role", None)}
+        packed = {"kind": "box", "lines": value.lines, "width": value.width, "role": getattr(value, "_role", None)}
+        split_blocks = getattr(value, "_split_blocks", None)
+        if split_blocks:
+            packed["split_blocks"] = [pack_rendered(block) for block in split_blocks]
+        return packed
     if isinstance(value, FloatItem):
         return {"kind": "float", "box": pack_rendered(value.box), "placement": value.placement, "meta": value.meta}
     if value is None:
@@ -129,6 +133,8 @@ def unpack_rendered(value):
     box = Box.from_lines(value["lines"], width=int(value["width"]))
     if value.get("role"):
         box._role = value["role"]
+    if value.get("split_blocks"):
+        box._split_blocks = [unpack_rendered(block) for block in value["split_blocks"]]
     return box
 
 def cached_render(namespace, payload, dependencies, build):

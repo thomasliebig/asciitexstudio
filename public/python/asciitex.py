@@ -1846,7 +1846,7 @@ def _format_bib_authors(author_field: str) -> str:
     parts = [p.strip() for p in re.split(r"\s+and\s+", author_field.strip(), flags=re.IGNORECASE) if p.strip()]
     if len(parts) <= 2:
         return " and ".join(parts)
-    return ", ".join(parts[:-1]) + " and " + parts[-1]
+    return "; ".join(parts[:-1]) + " and " + parts[-1]
 
 
 def _format_bib_entry_plain(num: int, key: str, fields: Dict[str, str]) -> str:

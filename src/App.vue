@@ -18,6 +18,7 @@ const statusText = ref('Loading Pyodide')
 const canvasWidth = ref(96)
 const sidebarOpen = ref(true)
 const autoCompile = ref(true)
+const themeMode = ref<'green' | 'amber'>((localStorage.getItem('asciitex-studio-theme') === 'amber') ? 'amber' : 'green')
 const editorWidth = ref(520)
 const workspaceRef = ref<HTMLElement>()
 const monacoPaneRef = ref<InstanceType<typeof MonacoPane>>()
@@ -338,6 +339,12 @@ function toggleAutoCompile(): void {
   else if (status.value !== 'building') statusText.value = 'Auto compile off'
 }
 
+function toggleTheme(): void {
+  themeMode.value = themeMode.value === 'green' ? 'amber' : 'green'
+  localStorage.setItem('asciitex-studio-theme', themeMode.value)
+  updatePopoutPreview()
+}
+
 function toggleSidebar(): void {
   sidebarOpen.value = !sidebarOpen.value
   nextTick(() => {
@@ -459,21 +466,26 @@ function escapeHtml(text: string): string {
 function popoutCss(): string {
   const base = import.meta.env.BASE_URL
   const fontUrl = `${window.location.origin}${base}fonts/NotoSansMono-Variable.ttf`
+  const amber = themeMode.value === 'amber'
+  const shellBg = amber
+    ? `radial-gradient(circle at 20% 0%, #6a4416 0, transparent 34%), linear-gradient(135deg, #160d03 0%, #271807 58%, #100902 100%)`
+    : `radial-gradient(circle at 20% 0%, #1d3b28 0, transparent 34%), linear-gradient(135deg, #0c160f 0%, #13231a 58%, #0a110d 100%)`
+  const barBg = amber ? '#241604e8' : '#132019e8'
+  const accent = amber ? '#ffd36d' : '#7ee097'
+  const paper = amber ? '#f7efd9' : '#eef5e9'
   return `
     @font-face { font-family: 'AsciiTeX Unicode Mono'; src: url('${fontUrl}') format('truetype'); font-display: block; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; background: #0b130e; color: #d8f2df; font-family: 'DM Sans', system-ui, sans-serif; }
-    .popout-shell { min-height: 100vh; display: grid; grid-template-rows: 42px 1fr; background:
-      radial-gradient(circle at 20% 0%, #1d3b28 0, transparent 34%),
-      linear-gradient(135deg, #0c160f 0%, #13231a 58%, #0a110d 100%); }
-    .popout-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 13px; border-bottom: 1px solid #31523d; background: #132019e8; color: #9fcfab; }
+    .popout-shell { min-height: 100vh; display: grid; grid-template-rows: 42px 1fr; background: ${shellBg}; }
+    .popout-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 13px; border-bottom: 1px solid ${accent}; background: ${barBg}; color: ${amber ? '#f3d79b' : '#9fcfab'}; }
     .popout-title { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
-    .popout-title i { width: 8px; height: 8px; border-radius: 50%; background: #7ee097; box-shadow: 0 0 12px #7ee09799; }
+    .popout-title i { width: 8px; height: 8px; border-radius: 50%; background: ${accent}; box-shadow: 0 0 12px ${accent}99; }
     .popout-actions { display: flex; align-items: center; gap: 10px; font-size: 11px; }
     button { height: 28px; padding: 0 10px; border: 1px solid #5b8e68; border-radius: 3px; color: #dff7e6; background: #1a3323; cursor: pointer; }
     button:hover { background: #24452f; border-color: #8be7a0; }
     .popout-stage { overflow: auto; display: grid; justify-items: center; align-content: start; padding: 28px; }
-    .popout-paper { --document-ch: 96; width: calc(var(--document-ch) * 1ch + 64px); min-width: calc(var(--document-ch) * 1ch + 64px); min-height: calc(100vh - 98px); padding: 30px 32px; border: 1px solid #bad3bd; background: #eef5e9; box-shadow: 0 0 0 1px #ffffff55 inset, 0 18px 54px #0008; }
+    .popout-paper { --document-ch: 96; width: fit-content; min-width: 0; min-height: calc(100vh - 98px); padding: 30px 32px; border: 1px solid ${amber ? '#d7b36b' : '#bad3bd'}; background: ${paper}; box-shadow: 0 0 0 1px #ffffff55 inset, 0 18px 54px #0008; font-family: 'AsciiTeX Unicode Mono', monospace; }
     pre { width: calc(var(--document-ch) * 1ch); margin: 0; color: #101d15; font-family: 'AsciiTeX Unicode Mono', monospace; font-size: 12px; line-height: 1.28; font-variant-ligatures: none; font-feature-settings: 'liga' 0, 'calt' 0; white-space: pre; }
   `
 }
@@ -486,10 +498,12 @@ function updatePopoutPreview(): void {
   }
   const pre = previewWindow.document.getElementById('preview-output')
   const paper = previewWindow.document.getElementById('preview-paper')
+  const style = previewWindow.document.getElementById('popout-theme-style')
   const statusLabel = previewWindow.document.getElementById('preview-status')
   const widthLabel = previewWindow.document.getElementById('preview-width')
   if (pre) pre.textContent = preview.value
   if (paper) paper.style.setProperty('--document-ch', String(canvasWidth.value))
+  if (style) style.textContent = popoutCss()
   if (statusLabel) statusLabel.textContent = statusText.value
   if (widthLabel) widthLabel.textContent = `${canvasWidth.value} chars`
 }
@@ -511,7 +525,7 @@ function openPreviewPopout(): void {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>AsciiTeX Live Preview</title>
-        <style>${popoutCss()}</style>
+        <style id="popout-theme-style">${popoutCss()}</style>
       </head>
       <body>
         <main class="popout-shell">
@@ -552,7 +566,7 @@ function togglePreviewPopout(): void {
 }
 
 watch(canvasWidth, () => { if (autoCompile.value) queueCompile() })
-watch([preview, statusText, canvasWidth], updatePopoutPreview)
+watch([preview, statusText, canvasWidth, themeMode], updatePopoutPreview)
 
 onMounted(async () => {
   installedApp.value = window.matchMedia('(display-mode: standalone)').matches
@@ -597,7 +611,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="studio">
+  <main class="studio" :class="`theme-${themeMode}`">
     <header class="topbar">
       <div class="brand">
         <button class="icon-button mobile-only" aria-label="Toggle files" @click="toggleSidebar">☰</button>
@@ -620,6 +634,10 @@ onBeforeUnmount(() => {
           class="auto-toggle" :class="{ active: autoCompile }"
           :aria-pressed="autoCompile" @click="toggleAutoCompile"
         ><span class="toggle-track"><i /></span> Auto compile</button>
+        <button
+          class="theme-toggle" :class="{ amber: themeMode === 'amber' }"
+          :aria-pressed="themeMode === 'amber'" title="Toggle green/amber theme" @click="toggleTheme"
+        ><span class="toggle-track"><i /></span> {{ themeMode === 'amber' ? 'Amber' : 'Green' }}</button>
         <button class="secondary-button" @click="downloadFile()">Download file</button>
         <button class="compile-button" :disabled="status === 'building'" @click="compileProject">
           <span>▶</span> Compile
@@ -694,6 +712,7 @@ onBeforeUnmount(() => {
             ref="monacoPaneRef"
             v-model="editorValue"
             :language="language"
+            :theme-mode="themeMode"
             @change="queueSaveAndBuild"
             @line-dblclick="revealOutput"
           />

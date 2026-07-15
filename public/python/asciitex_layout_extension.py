@@ -185,6 +185,21 @@ def _pad_lines(lines: List[str], width: int) -> List[str]:
     return [ln[:width].ljust(width) for ln in lines]
 
 
+def _wrap_verbatim_lines(lines: List[str], width: int) -> List[str]:
+    out: List[str] = []
+    chunk_width = max(1, width - 1)
+    for raw in lines:
+        line = raw.rstrip("\n")
+        if line == "":
+            out.append("")
+            continue
+        while len(line) > width:
+            out.append(line[:chunk_width] + "\u21a9")
+            line = line[chunk_width:]
+        out.append(line)
+    return out or [""]
+
+
 def _balanced_inline_command(lines: List[str], i: int, cmd: str) -> Optional[Tuple[str, int]]:
     r"""Read \cmd{...} starting at lines[i], allowing multi-line balanced braces.
 
@@ -474,7 +489,7 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
 
         if isinstance(node, VerbatimNode):
             raw_lines = node.text.splitlines() or [""]
-            return Box.from_lines(_pad_lines(raw_lines, max_width), width=max_width)
+            return Box.from_lines(_pad_lines(_wrap_verbatim_lines(raw_lines, max_width), max_width), width=max_width)
 
         if isinstance(node, ListNode):
             return self._render_list(node=node, compiler=compiler, max_width=max_width, depth=0)

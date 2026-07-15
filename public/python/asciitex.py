@@ -796,8 +796,19 @@ class TypesetterAdapter:
         return Box.from_lines([top, mid, bot], width=max_width)
 
     def codeblock(self, code: str, max_width: int) -> Box:
-        lines = code.rstrip("\n").splitlines() or [""]
-        lines = [l[: (max_width - 4)] for l in lines]
+        raw_lines = code.rstrip("\n").splitlines() or [""]
+        content_width = max(1, max_width - 4)
+        lines: List[str] = []
+        for raw in raw_lines:
+            line = raw.rstrip("\n")
+            if line == "":
+                lines.append("")
+                continue
+            while len(line) > content_width:
+                chunk = line[: max(1, content_width - 1)] + "\u21a9"
+                lines.append(chunk)
+                line = line[max(1, content_width - 1):]
+            lines.append(line)
         top = "┌" + "─" * (max_width - 2) + "┐"
         mid = ["│ " + l.ljust(max_width - 4) + " │" for l in lines]
         bot = "└" + "─" * (max_width - 2) + "┘"

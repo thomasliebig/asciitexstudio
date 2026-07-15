@@ -2,7 +2,7 @@
 import loader from '@monaco-editor/loader'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const props = defineProps<{ modelValue: string; language: string }>()
+const props = defineProps<{ modelValue: string; language: string; themeMode: 'green' | 'amber' }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string]; change: []; 'line-dblclick': [line: number] }>()
 const host = ref<HTMLElement>()
 const currentLine = ref(1)
@@ -80,10 +80,44 @@ onMounted(async () => {
       'editorSuggestWidget.selectedBackground': '#1f432b',
     },
   })
+  monaco.editor.defineTheme('asciitex-retro-amber', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: '', foreground: 'f6dfac' },
+      { token: 'comment', foreground: '9f7d45', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'ffd36d', fontStyle: 'bold' },
+      { token: 'type.identifier', foreground: 'ffe2a0' },
+      { token: 'attribute.value', foreground: 'bfe08a' },
+      { token: 'string', foreground: 'f5c981' },
+      { token: 'constant', foreground: 'ffeb9a' },
+      { token: 'number', foreground: 'ffc266' },
+      { token: 'delimiter.curly', foreground: 'd89f45' },
+    ],
+    colors: {
+      'editor.background': '#130d05',
+      'editor.foreground': '#f6dfac',
+      'editorLineNumber.foreground': '#72562d',
+      'editorLineNumber.activeForeground': '#ffd36d',
+      'editorCursor.foreground': '#ffd36d',
+      'editor.selectionBackground': '#5a3514',
+      'editor.inactiveSelectionBackground': '#35220f',
+      'editor.lineHighlightBackground': '#241606',
+      'editor.lineHighlightBorder': '#5b3512',
+      'editorGutter.background': '#120c05',
+      'editorIndentGuide.background1': '#37220c',
+      'editorIndentGuide.activeBackground1': '#a36c24',
+      'editorWidget.background': '#201406',
+      'editorWidget.border': '#7a501c',
+      'editorSuggestWidget.background': '#201406',
+      'editorSuggestWidget.border': '#7a501c',
+      'editorSuggestWidget.selectedBackground': '#4a2d0d',
+    },
+  })
   editor = monaco.editor.create(host.value!, {
     value: props.modelValue,
     language: props.language,
-    theme: 'asciitex-retro-green',
+    theme: props.themeMode === 'amber' ? 'asciitex-retro-amber' : 'asciitex-retro-green',
     fontFamily: 'JetBrains Mono, Cascadia Code, Consolas, monospace',
     fontSize: 14,
     lineHeight: 23,
@@ -123,6 +157,10 @@ watch(() => props.modelValue, value => {
 
 watch(() => props.language, language => {
   if (editor && monaco) monaco.editor.setModelLanguage(editor.getModel(), language)
+})
+
+watch(() => props.themeMode, themeMode => {
+  if (editor && monaco) monaco.editor.setTheme(themeMode === 'amber' ? 'asciitex-retro-amber' : 'asciitex-retro-green')
 })
 
 onBeforeUnmount(() => {

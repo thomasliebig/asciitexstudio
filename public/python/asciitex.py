@@ -1837,9 +1837,21 @@ def _parse_bibtex_files(bibfiles: List[str]) -> Dict[str, Dict[str, str]]:
     return db
 
 
+def _format_bib_authors(author_field: str) -> str:
+    """Format a BibTeX author/editor list for Unicode bibliography output.
+
+    BibTeX separates every author with ``and``. For display we use commas
+    between all earlier authors and keep only the final ``and``.
+    """
+    parts = [p.strip() for p in re.split(r"\s+and\s+", author_field.strip(), flags=re.IGNORECASE) if p.strip()]
+    if len(parts) <= 2:
+        return " and ".join(parts)
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
 def _format_bib_entry_plain(num: int, key: str, fields: Dict[str, str]) -> str:
     # Minimal, consistent formatting (unsrt-like numeric)
-    authors = fields.get("author") or fields.get("editor") or ""
+    authors = _format_bib_authors(fields.get("author") or fields.get("editor") or "")
     title = fields.get("title") or ""
     year = fields.get("year") or ""
     journal = fields.get("journal") or fields.get("booktitle") or fields.get("publisher") or ""

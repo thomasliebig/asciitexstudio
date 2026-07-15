@@ -285,6 +285,40 @@ def _roman_index(n: int) -> str:
     return "".join(out)
 
 
+def _split_flowable_lines(lines: List[str], width: int, *, chunk_lines: int = 3, min_tail: int = 2) -> List[Box]:
+    """Split one visually continuous block into column-friendly fragments.
+
+    The split points are deliberately conservative: after about three lines and
+    never leaving a one-line widow/orphan at either side of the split. The first
+    fragments are marked as ``flow-fragment`` so the layout engine inserts no
+    visible gap inside the original item.
+    """
+    if len(lines) <= chunk_lines + min_tail:
+        box = Box.from_lines(lines, width=width)
+        box._role = "list-item"
+        return [box]
+
+    chunks: List[List[str]] = []
+    idx = 0
+    while idx < len(lines):
+        remaining = len(lines) - idx
+        if chunks and remaining <= min_tail:
+            chunks[-1].extend(lines[idx:])
+            break
+        take = min(chunk_lines, remaining)
+        if remaining - take == 1:
+            take += 1
+        chunks.append(lines[idx:idx + take])
+        idx += take
+
+    out: List[Box] = []
+    for chunk_idx, chunk in enumerate(chunks):
+        fragment = Box.from_lines(chunk, width=width)
+        fragment._role = "flow-fragment" if chunk_idx < len(chunks) - 1 else "list-item"
+        out.append(fragment)
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Nodes
 # ---------------------------------------------------------------------------
@@ -536,7 +570,7 @@ class LayoutBlocksExtension(ParserExtension, RenderExtension):
                 item_lines.append((follow_prefix + ln[:inner_w]).ljust(max_width))
             item_box = Box.from_lines(item_lines, width=max_width)
             item_box._role = "list-item"
-            split_blocks.append(item_box)
+            split_blocks.extend(_split_flowable_lines(item_lines, max_width))
             lines.extend(item_lines)
             if idx != len(node.items):
                 lines.append("".ljust(max_width))

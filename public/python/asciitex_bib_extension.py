@@ -244,7 +244,7 @@ def _format_authors(author_field: str) -> str:
         return out[0]
     if len(out) == 2:
         return f"{out[0]} and {out[1]}"
-    return f"{out[0]} et al."
+    return ", ".join(out[:-1]) + " and " + out[-1]
 
 def format_bib_entry(entry: Dict[str, str]) -> str:
     typ = entry.get("__type__", "").lower()

@@ -11,7 +11,7 @@ type WorkerResponse =
   | { id: number; type: 'result'; output: string; duration: number; renderCache: string }
   | { id: number; type: 'error'; error: string }
 
-const ENGINE_VERSION = '34'
+const ENGINE_VERSION = '35'
 
 export class AsciiTeXCompiler {
   private worker = new Worker(`${import.meta.env.BASE_URL}pyodide-worker.js?v=${ENGINE_VERSION}`)

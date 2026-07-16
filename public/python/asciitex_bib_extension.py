@@ -81,9 +81,36 @@ def _strip_outer_quotes(s: str) -> str:
         return s[1:-1].strip()
     return s
 
+def _decode_latex_chars(s: str) -> str:
+    """Decode common LaTeX accent and special-character commands."""
+    accent_maps = {
+        '"': str.maketrans("aouAOUeEiIy", "äöüÄÖÜëËïÏÿ"),
+        "'": str.maketrans("aAeEiIoOuUyYcCnN", "áÁéÉíÍóÓúÚýÝćĆńŃ"),
+        "`": str.maketrans("aAeEiIoOuU", "àÀèÈìÌòÒùÙ"),
+        "^": str.maketrans("aAeEiIoOuUcCgGhHjJsS", "âÂêÊîÎôÔûÛĉĈĝĜĥĤĵĴŝŜ"),
+        "~": str.maketrans("aAnNoO", "ãÃñÑõÕ"),
+        "c": str.maketrans("cCsS", "çÇşŞ"),
+        "k": str.maketrans("aAeEiIoOuU", "ąĄęĘįĮǫǪųŲ"),
+        "r": str.maketrans("aAuU", "åÅůŮ"),
+        "/": str.maketrans("oOlL", "øØłŁ"),
+    }
+    specials = {
+        "ae": "æ", "AE": "Æ", "oe": "œ", "OE": "Œ", "aa": "å", "AA": "Å",
+        "o": "ø", "O": "Ø", "l": "ł", "L": "Ł", "ss": "ß",
+    }
+    for cmd, repl in specials.items():
+        s = re.sub(r"\{\\%s\s*\}" % re.escape(cmd), repl, s)
+        s = re.sub(r"\\%s(?:\{\})?" % re.escape(cmd), repl, s)
+    for accent, table in accent_maps.items():
+        pattern = r"\{?\\%s\s*(?:\{([A-Za-z])\}|([A-Za-z]))\}?" % re.escape(accent)
+        s = re.sub(pattern, lambda m, table=table: (m.group(1) or m.group(2)).translate(table), s)
+    return s
+
+
 def _unescape_texish(s: str) -> str:
     # very small subset: collapse whitespace and strip common brace grouping
     s = s.replace("\n", " ")
+    s = _decode_latex_chars(s)
     s = re.sub(r"\s+", " ", s).strip()
     # remove grouping braces used for capitalization protection
     s = s.replace("{", "").replace("}", "")

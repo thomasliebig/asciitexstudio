@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { zipSync } from 'fflate'
+import { unzipSync, zipSync } from 'fflate'
 import MonacoPane from './MonacoPane.vue'
 import {
   initProjectFs, isTextPath, listFiles, readText, removeFile, renameFile,
@@ -77,6 +77,31 @@ function iconFor(path: string): string {
 }
 
 function shortName(path: string): string { return path.replace(/^\//, '') }
+
+function normalizedUploadPath(path: string): string | undefined {
+  const normalized = path.replaceAll('\\', '/').replace(/^\/+/, '')
+  if (!normalized || normalized.endsWith('/')) return undefined
+  const parts = normalized.split('/').filter(Boolean)
+  if (!parts.length || parts.includes('..')) return undefined
+  if (parts[0] === '__MACOSX') return undefined
+  const name = parts.at(-1) ?? ''
+  if (!name || name === '.DS_Store' || name.startsWith('.asciitex-')) return undefined
+  return `/${parts.join('/')}`
+}
+
+function stripCommonZipRoot(entries: Array<{ path: string; data: Uint8Array }>): Array<{ path: string; data: Uint8Array }> {
+  const roots = new Set(entries.map(entry => entry.path.replace(/^\//, '').split('/')[0]).filter(Boolean))
+  if (roots.size !== 1) return entries
+  const root = [...roots][0]
+  if (entries.some(entry => entry.path === `/${root}`)) return entries
+  return entries
+    .map(entry => ({ ...entry, path: normalizedUploadPath(entry.path.replace(/^\//, '').split('/').slice(1).join('/')) }))
+    .filter((entry): entry is { path: string; data: Uint8Array } => Boolean(entry.path))
+}
+
+function isZipFile(file: File): boolean {
+  return file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed'
+}
 
 async function refreshFiles(): Promise<void> { files.value = await listFiles() }
 
@@ -189,15 +214,34 @@ async function uploadFiles(event: Event): Promise<void> {
 async function writeDroppedFiles(droppedFiles: File[]): Promise<void> {
   if (!droppedFiles.length) return
   await flushSave()
+  const writtenPaths: string[] = []
   for (const file of droppedFiles) {
+    if (isZipFile(file)) {
+      try {
+        const archive = unzipSync(new Uint8Array(await file.arrayBuffer()))
+        const entries = stripCommonZipRoot(Object.entries(archive)
+          .map(([entryPath, data]) => {
+            const path = normalizedUploadPath(entryPath)
+            return path ? { path, data } : undefined
+          })
+          .filter((entry): entry is { path: string; data: Uint8Array } => Boolean(entry)))
+        for (const entry of entries) {
+          await writeBinary(entry.path, entry.data)
+          writtenPaths.push(entry.path)
+        }
+      } catch (error) {
+        window.alert(`Could not import ${file.name}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      continue
+    }
     const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
-    const path = `/${relative.replace(/^\/+/, '').replaceAll('\\', '/')}`
+    const path = normalizedUploadPath(relative)
+    if (!path) continue
     await writeBinary(path, new Uint8Array(await file.arrayBuffer()))
+    writtenPaths.push(path)
   }
   await refreshFiles()
-  const firstText = droppedFiles
-    .map(file => `/${(((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replace(/^\/+/, '').replaceAll('\\', '/'))}`)
-    .find(path => isTextPath(path))
+  const firstText = (writtenPaths.includes('/main.tex') ? '/main.tex' : writtenPaths.find(path => isTextPath(path)))
   if (firstText) await selectFile(firstText)
   queueCompile()
 }

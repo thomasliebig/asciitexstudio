@@ -43,6 +43,7 @@ AsciiTeX Studio feels a bit like a tiny, Unicode-native Overleaf: file browser o
 - project browser for `.tex`, BibTeX, images and supporting files
 - drag-and-drop file upload
 - download individual files or the whole project as ZIP
+- re-import exported ZIP projects, including project folders and nested assets
 - two-way navigation between source and rendered output
 - adjustable editor/output split and document width
 - local-first project persistence in IndexedDB

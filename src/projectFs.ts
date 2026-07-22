@@ -36,9 +36,39 @@ function appUrl(path: string): string {
 }
 
 function normalizeProjectPath(path: string): string {
-  const normalized = `/${path.replace(/^\/+/, '')}`
-  if (normalized.includes('..')) throw new Error(`Invalid seed path: ${path}`)
+  const normalized = `/${path.replaceAll('\\', '/').replace(/^\/+/, '')}`
+  if (normalized.split('/').includes('..')) throw new Error(`Invalid project path: ${path}`)
   return normalized
+}
+
+function parentDirectory(path: string): string {
+  const normalized = normalizeProjectPath(path)
+  const slash = normalized.lastIndexOf('/')
+  return slash > 0 ? normalized.slice(0, slash) : '/'
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await call<any>(fs.stat.bind(fs), path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function ensureDirectory(path: string): Promise<void> {
+  const normalized = normalizeProjectPath(path)
+  if (normalized === '/') return
+  const parts = normalized.split('/').filter(Boolean)
+  let current = ''
+  for (const part of parts) {
+    current += `/${part}`
+    if (!(await exists(current))) await call<void>(fs.mkdir.bind(fs), current)
+  }
+}
+
+async function ensureParentDirectory(path: string): Promise<void> {
+  await ensureDirectory(parentDirectory(path))
 }
 
 async function loadSeedManifest(): Promise<SeedManifest> {
@@ -86,11 +116,20 @@ export function isTextPath(path: string): boolean {
 }
 
 export async function listFiles(): Promise<ProjectFile[]> {
-  const names = (await call<string[]>(fs.readdir.bind(fs), '/'))
-    .filter(name => !name.startsWith('.asciitex-'))
-    .sort((a, b) => a.localeCompare(b))
-  return Promise.all(names.map(async name => {
-    const path = `/${name}`
+  async function walk(dir: string): Promise<string[]> {
+    const names = await call<string[]>(fs.readdir.bind(fs), dir)
+    const out: string[] = []
+    for (const name of names) {
+      if (name.startsWith('.asciitex-')) continue
+      const path = dir === '/' ? `/${name}` : `${dir}/${name}`
+      const stat = await call<any>(fs.stat.bind(fs), path)
+      if (stat.isDirectory()) out.push(...await walk(path))
+      else out.push(path)
+    }
+    return out
+  }
+  const paths = (await walk('/')).sort((a, b) => a.localeCompare(b))
+  return Promise.all(paths.map(async path => {
     const buffer = await call<any>(fs.readFile.bind(fs), path)
     return { path, data: new Uint8Array(buffer), text: isTextPath(path) }
   }))
@@ -111,12 +150,16 @@ export async function readText(path: string): Promise<string> {
 }
 
 export async function writeText(path: string, content: string): Promise<void> {
-  await call<void>(fs.writeFile.bind(fs), path, content, 'utf8')
+  const normalized = normalizeProjectPath(path)
+  await ensureParentDirectory(normalized)
+  await call<void>(fs.writeFile.bind(fs), normalized, content, 'utf8')
 }
 
 export async function writeBinary(path: string, content: Uint8Array): Promise<void> {
   const Buffer = BrowserFS.BFSRequire('buffer').Buffer
-  await call<void>(fs.writeFile.bind(fs), path, Buffer.from(content))
+  const normalized = normalizeProjectPath(path)
+  await ensureParentDirectory(normalized)
+  await call<void>(fs.writeFile.bind(fs), normalized, Buffer.from(content))
 }
 
 export async function removeFile(path: string): Promise<void> {
@@ -124,5 +167,7 @@ export async function removeFile(path: string): Promise<void> {
 }
 
 export async function renameFile(from: string, to: string): Promise<void> {
-  await call<void>(fs.rename.bind(fs), from, to)
+  const normalizedTo = normalizeProjectPath(to)
+  await ensureParentDirectory(normalizedTo)
+  await call<void>(fs.rename.bind(fs), normalizeProjectPath(from), normalizedTo)
 }

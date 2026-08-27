@@ -38,6 +38,17 @@ AsciiTeX Studio feels a bit like a tiny, Unicode-native Overleaf: file browser o
 - Pop out the live preview for a second monitor.
 - Use green or amber retro themes, because terminal nostalgia deserves options.
 
+## Why use AsciiTeX Studio?
+
+| If you want to… | Choose |
+| --- | --- |
+| Write structured Unicode documents with instant browser preview | **AsciiTeX Studio** |
+| Generate the same output from Python or automation | [AsciiTeX](https://github.com/thomasliebig/AsciiTeX) |
+| Collaborate on print-quality PDF documents | Overleaf or another LaTeX editor |
+| Edit ordinary Markdown files | A Markdown editor |
+
+All project files and compilation stay in the browser. No document content is uploaded to an AsciiTeX server.
+
 ## Feature overview
 
 - Monaco editor with AsciiTeX syntax highlighting
@@ -58,6 +69,10 @@ AsciiTeX Studio feels a bit like a tiny, Unicode-native Overleaf: file browser o
 ## Architecture
 
 AsciiTeX Studio combines a modern web editor with a Python document compiler while keeping files and compilation in the user's browser:
+
+## Contributing
+
+Bug reports, browser-compatibility findings, examples, and focused pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 1. Vue and Vite provide the application shell and user interface.
 2. BrowserFS exposes an in-browser project filesystem backed by IndexedDB.

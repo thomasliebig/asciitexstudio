@@ -4,6 +4,8 @@
 
 Write TeX-like documents and instantly render them as clean monospaced Unicode — directly in your browser, with no server-side document upload.
 
+**AsciiTeX Studio is a local-first, browser-based technical writing editor:** a practical Unicode and plain-text alternative for terminal documentation, CLI manuals, teaching notes, README examples, and text artifacts that should remain easy to diff and search.
+
 ## Try it online
 
 👉 **Open AsciiTeX Studio:** <https://thomasliebig.github.io/asciitexstudio/>
@@ -54,6 +56,8 @@ AsciiTeX Studio feels a bit like a tiny, Unicode-native Overleaf: file browser o
 - numbered and unnumbered sections, equations, figures, diagrams, tables and boxes
 
 ## Architecture
+
+AsciiTeX Studio combines a modern web editor with a Python document compiler while keeping files and compilation in the user's browser:
 
 1. Vue and Vite provide the application shell and user interface.
 2. BrowserFS exposes an in-browser project filesystem backed by IndexedDB.
